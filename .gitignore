@@ -37,3 +37,9 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# mine
+dracor-shiny/
+gerdracor/
+old/
+paper/
