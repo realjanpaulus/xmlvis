@@ -1,8 +1,10 @@
 library(curl)
 library(docstring, warn.conflicts = FALSE)
 library(jsonlite, warn.conflicts = FALSE)
+library(methods)
 library(shiny, warn.conflicts = FALSE)
 library(shinythemes)
+library(XML)
 
 
 extractdramas <- function(urlcorpus) {
@@ -15,33 +17,59 @@ extractdramas <- function(urlcorpus) {
 }
 
 
-selectcorpora <- function(urlcorpora){
+selectcorpora <- function(urlcorpora) {
 	#' Selects list of corpora from url.
 	#'
 	#' Takes an url to a json file with corpora infos 
 	#' and collects all names in a list.
 	#'
-	#' @param urlcorpora an url to all corpora
+	#' @param urlcorpora an url to all corpora.
 	corpora <- fromJSON(urlcorpora)
 	corporanames <- corpora$name
 	names(corporanames) <- corpora$title
 	return(as.list(corporanames))
 }
 
-selectauthors <- function(corpus){
-	#' TODO
+
+selectauthors <- function(corpus) {
+	#' Selects list of authors from corpus.
 	#'
+	#' Takes a corpus and returns a list of all the included authors.
 	#'
-	#'
-	#' @param corpus 
+	#' @param corpus a list of informations/contents of the selected corpus.
 	authors <- unique(corpus$author.name)
 	names(authors) <- unique(corpus$author.name)
 	return(authors)
 }
 
-selectplays <- function(corpus, input = input){
-	#' TODO
-	links <- corpus[corpus$author.name == input, "networkdataCsvUrl"]
-	names(links) <- corpus[corpus$author.name == input,"title"]
+
+selectplays <- function(corpus, input = input) {
+	#' Selects list of all plays from an author within a corpus.
+	#' 
+	#' Takes a corpus and an input (= author name) and returns a list of the authors plays.
+	#'
+	#' @param corpus a list of informations/contents of the selected corpus.
+	#' @param input the name of the selected author.
+	links <- corpus[corpus$author.name == input, "name"]
+	names(links) <- corpus[corpus$author.name == input, "title"]
 	return(links[order(names(links))])
 }
+
+
+
+getplaytext <- function(texturl) {
+	#' Extracs the play text by an url.
+	#'
+	#' Takes an url to the plain text of an url and extracts the text.
+	#'
+	#' @param texturl a string with an url to the plain text of an url.
+
+	return(content(GET(texturl), "text", encoding="UTF-8"))
+} 
+
+
+
+
+
+
+
