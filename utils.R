@@ -1,7 +1,10 @@
 library(curl)
 library(docstring, warn.conflicts = FALSE)
+library(DT)
 library(jsonlite, warn.conflicts = FALSE)
 library(methods)
+library(quanteda, warn.conflicts = FALSE)
+library("quanteda.textstats", warn.conflicts = FALSE)
 library(shiny, warn.conflicts = FALSE)
 library(shinythemes)
 library(XML)
@@ -58,7 +61,7 @@ selectplays <- function(corpus, input = input) {
 
 
 getplaytext <- function(texturl) {
-	#' Extracs the play text by an url.
+	#' Extracts the play text by an url.
 	#'
 	#' Takes an url to the plain text of an url and extracts the text.
 	#'
@@ -66,6 +69,49 @@ getplaytext <- function(texturl) {
 
 	return(content(GET(texturl), "text", encoding="UTF-8"))
 } 
+
+
+# TODO: weg?
+countwords <- function(texturl, word) {
+	#' TODO
+	s <- getplaytext(texturl)
+	wordlist <- unlist(strsplit(s, " "))
+	return(length(grep(word, wordlist, ignore.case = TRUE)))
+}
+
+
+langchecker <- function(lang) {
+	#' Get the correct language identifier.
+	#'
+	#' Takes a language string and returns correct language string.
+	#'
+	#' @param lang a string for a language.
+
+	# EXPAND: for more corpora
+	languages <- list("ger"="german", "german"="german",
+					  "shake"="english", "english"="english")
+
+	return(languages$lang)
+}
+
+
+wordfreqdf <- function(texturl, lang, remove_stopwords = FALSE) {
+	#' Extracts term and document frequencies from a plain text by its url.
+	#'
+	#' Takes an url to the plain text of an url and creates a dataframe
+	#' with term and document frequencies of the text.
+	#'
+	#' @param texturl a string with an url to the plain text of an url.
+	# todo
+	playtext <- getplaytext(texturl)
+	if (remove_stopwords) {
+		df <- dfm(playtext, remove_punct = TRUE, remove = stopwords(langchecker(lang)))
+	} else {
+		df <- dfm(playtext, remove_punct = TRUE)
+	}
+	
+	return(textstat_frequency(df))
+}
 
 
 
