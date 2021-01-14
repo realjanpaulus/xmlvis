@@ -1,3 +1,6 @@
+#TODOs:
+# - sortieren der funktionen alphabetisch und thematisch
+
 library(curl)
 library(docstring, warn.conflicts = FALSE)
 library(DT)
@@ -80,37 +83,79 @@ countwords <- function(texturl, word) {
 }
 
 
+# todo: weg (aktuell keine funktion)
 langchecker <- function(lang) {
-	#' Get the correct language identifier.
-	#'
-	#' Takes a language string and returns correct language string.
-	#'
-	#' @param lang a string for a language.
+	
 
 	# EXPAND: for more corpora
-	languages <- list("ger"="german", "german"="german",
-					  "shake"="english", "english"="english")
+	output <- lang
+	if (lang == "ger") {
+		output <- "german"
+	}
 
-	return(languages$lang)
+	return(output)
+}
+
+get_stopwords <- function(lang) {
+	#' Get a list of stopwords by its language.
+	#'
+	#' Takes a language string and returns the correct stopword list.
+	#'
+	#' @param lang a string for a language.
+	output <- lang
+	src <- "stopwords-iso"
+
+	# EXPAND: for more corpora
+	if (lang == "ger") {
+		output <- "german"
+		src <- "stopwords-iso"
+	}
+	return(stopwords(output, source=src))
 }
 
 
-wordfreqdf <- function(texturl, lang, remove_stopwords = FALSE) {
-	#' Extracts term and document frequencies from a plain text by its url.
+
+add_dfs <- function(df1, df2) {
+	#' Combines two dataframes to one dataframe.
 	#'
-	#' Takes an url to the plain text of an url and creates a dataframe
-	#' with term and document frequencies of the text.
+	#' Combines two dataframes to one dataframe by the column "feature"
+	#' and sorts it by the column "frequency" (descending).
 	#'
-	#' @param texturl a string with an url to the plain text of an url.
-	# todo
-	playtext <- getplaytext(texturl)
-	if (remove_stopwords) {
-		df <- dfm(playtext, remove_punct = TRUE, remove = stopwords(langchecker(lang)))
+	#' @param df1 a dataframe, created by quanteda::textstat_frequency()
+	#' @param df2 a dataframe, created by quanteda::textstat_frequency()
+	df <- ddply(rbind(df1, df2), "feature", numcolwise(sum))
+	return(arrange(df, desc(frequency)))
+}
+
+
+wordfreqdf <- function(playtext, lang, remove_punct = TRUE,
+					   tolower = TRUE, remove_stopwords = FALSE) {
+	#' Extracts term and document frequencies from a plain text.
+	#'
+	#' Takes plain text of a play and creates a dataframe
+	#' with term and document frequencies of the text. 
+	#' Columns "rank" and "group" are removed.
+	#'
+	#' @param playtext text of the play as string.
+	#' @param lang language identificator as string.
+	#' @param remove_punct boolean value if punctation should be removed.
+	#' @param tolower boolean value if words should be converted to lowercase.
+	#' @param remove_stopwords boolean value if stopwords should be removed.
+	
+
+	if (isTRUE(remove_stopwords)) {
+		df <- dfm(playtext, 
+				  remove_punct = remove_punct, 
+				  tolower = tolower,
+				  remove = get_stopwords(lang))
 	} else {
-		df <- dfm(playtext, remove_punct = TRUE)
+		df <- dfm(playtext, 
+				  remove_punct = remove_punct, 
+				  tolower = tolower)
 	}
 	
-	return(textstat_frequency(df))
+
+	return(subset(textstat_frequency(df), select=-c(rank, group)))
 }
 
 

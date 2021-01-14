@@ -4,9 +4,11 @@ library(DT)
 library(jsonlite, warn.conflicts = FALSE)
 library(httr, warn.conflicts = FALSE)
 library(methods)
+library(plyr)
 # todo
 # library(NLP, warn.conflicts = FALSE)
 library(shiny, warn.conflicts = FALSE)
+library(shinycssloaders)
 library(shinythemes)
 # todo
 # library(tm, warn.conflicts = FALSE)
@@ -16,8 +18,9 @@ source("utils.R")
 
 # global variables #
 
-about <- "about.html"
-more <- "more.html"
+about <- "www/about.html"
+more <- "www/more.html"
+wordfreqhtml <- "www/wordfreqtext.html"
 
 
 urlcorpus <- "https://dracor.org/api/corpora/ger"
@@ -36,18 +39,13 @@ ui <- fluidPage(theme = shinytheme("united"),
 		sidebarPanel(
 			verticalLayout(
 				uiOutput("select_corpora"),
-				uiOutput("checkbox_wholecorpus"),
-				# only renders author/play selection if the "Use whole checkbox" 
+				uiOutput("select_authors"),
+				# only renders play selection if the "Use all plays" 
 				# checkbox is not activated
-				conditionalPanel(condition = "input.checkbox_wholecorpus == false",
-					uiOutput("select_authors"),
-					# only renders play selection if the "Use all plays" 
-					# checkbox is not activated
-					conditionalPanel(condition = "input.checkbox_allplays == false",
-						uiOutput("select_plays")
-					),
-					uiOutput("checkbox_allplays")
+				conditionalPanel(condition = "input.checkbox_allplays == false",
+					uiOutput("select_plays")
 				),
+				uiOutput("checkbox_allplays"),
 				tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))
 			),
 			wellPanel(
@@ -55,10 +53,12 @@ ui <- fluidPage(theme = shinytheme("united"),
 					uiOutput("statscontrols")
 				),
 				conditionalPanel(condition = "input.tabselected == 2",
-					uiOutput("wordfreqtitle"),
+					uiOutput("wordfreqpaneltitle"),
 					# todo weg?
 					# uiOutput("wordfreqcontrols")
-					uiOutput("checkbox_stopwords")
+					uiOutput("checkbox_stopwords"),
+					uiOutput("checkbox_punctation"),
+					uiOutput("checkbox_lowercase")
 				),
 				#TODO: überarbeiten
 				conditionalPanel(condition = "input.tabselected == 11",
@@ -76,13 +76,20 @@ ui <- fluidPage(theme = shinytheme("united"),
 				".shiny-output-error:before { visibility: hidden; }"
 			),
 			tabsetPanel(id="tabselected",
-				tabPanel(title = uiOutput("statspanel"), 
-						 uiOutput("statspage"), 
-						 value=1),
-				tabPanel(title = uiOutput("wordfreqpanel"), 
-						 DT::dataTableOutput(outputId = "wordfreqtable"),
+				tabPanel(title = "Word frequencies", 
+						 titlePanel(uiOutput("wordfreqtitle")),
+						 fluidRow(
+						 	column(width=6, 
+						 		   style="padding-top: 22px;",
+						 		   DT::dataTableOutput(outputId = "wordfreqtable")),
+						 	column(width=6, 
+						 		   style="padding-top: 0px; padding-right: 22px;",
+						 		   uiOutput("wordfreqtext")) 
+						 ),
 						 value=2),
-				#todo weg!
+				tabPanel(title = "Statistics", 
+						 uiOutput("statspage"), 
+						 value=1), #todo: reihenfolge ändern? das eins hoch
 				tabPanel(title = "Function 1", value=11),
 				tabPanel(title = "Function 2", value=22),
 				tabPanel(title = "Function 3", uiOutput("xmltest"), value=3),
@@ -101,7 +108,9 @@ ui <- fluidPage(theme = shinytheme("united"),
 
 server <- function(input, output) {
 
-	# TODO: erklären
+	
+	# reactive corpus list with all information of a corpus,
+	# taken from json file, which was identified by its input `lang`
 	corp <- reactive({
 		lang <- input$corpus
 		if(is.null(lang)) return(NULL)
@@ -116,12 +125,7 @@ server <- function(input, output) {
 					# EXPAND: change to `urlcorpora` for all corpora
 	})
 
-	# render whole corpus checkbox
-	output$checkbox_wholecorpus <- renderUI({
-		checkboxInput("checkbox_wholecorpus", 
-					  label = "Use whole corpus",
-					  value = FALSE)
-	})
+	
 
 	# render author selection
 	output$select_authors <- renderUI({
@@ -155,6 +159,20 @@ server <- function(input, output) {
 					  value = FALSE)
 	})
 
+	# render punctation checkbox (often reused)
+	output$checkbox_punctation <- renderUI({
+		checkboxInput("checkbox_punctation",
+					  label = "Remove punctation",
+					  value = TRUE)
+	})
+
+	# render lowercase checkbox (often reused)
+	output$checkbox_lowercase <- renderUI({
+		checkboxInput("checkbox_lowercase",
+					  label = "Convert all words to lowercase",
+					  value = TRUE)
+	})
+
 
 	#############################################
 	### Render tab 1: Plays/corpus statistics ###
@@ -163,13 +181,12 @@ server <- function(input, output) {
 	# TODO!!!
 
 	# render tab name dynamically
+	# todo: different name, see render tab 2
 	output$statspanel <- renderText({
-		if (!isTRUE(input$checkbox_wholecorpus) & !isTRUE(input$checkbox_allplays)) {
-			"Play statistics"
-		} else if (!isTRUE(input$checkbox_wholecorpus) & isTRUE(input$checkbox_allplays)) {
-			"Plays statistics"
+		if (!isTRUE(input$checkbox_allplays)) {
+			"Play statistics <br/>(Single play)"
 		} else {
-			"Corpus statistics"
+			"Plays statistics <br/>(All plays)"
 		}
 	})
 
@@ -185,95 +202,144 @@ server <- function(input, output) {
 	output$statspage<- renderUI({
 		# todo: html interaktiv? oder lieber table?
 
-		if (!isTRUE(input$checkbox_wholecorpus) & !isTRUE(input$checkbox_allplays)) {
-
+		if (!isTRUE(input$checkbox_allplays)) {
 			includeHTML(more)
-		} else if (!isTRUE(input$checkbox_wholecorpus) & isTRUE(input$checkbox_allplays)) {
-			includeHTML(about)
 		} else {
-			renderText({
-				"Corpus"
-			})
-			#renderDataTable()
+			includeHTML(about)
 		}
 
 	})
 
 
+
+####
+	#
+	#
+	# todo: hier aktuell
+####
+	#
+	#
+
+
+
+	#todo: position noch richtig?
 	############################################
 	### Render tab 2: Word Frequencies Table ###
 	############################################
 
 
-	# render tab name dynamically
-	# todo: doing this globally?
-	output$wordfreqpanel <- renderText({
-		if (!isTRUE(input$checkbox_wholecorpus) & !isTRUE(input$checkbox_allplays)) {
-			"Play word frequencies"
-		} else if (!isTRUE(input$checkbox_wholecorpus) & isTRUE(input$checkbox_allplays)) {
-			"Plays word frequencies"
+	# render dynamic tab title
+	output$wordfreqtitle <- renderText({
+		if (!isTRUE(input$checkbox_allplays)) {
+			"Word frequencies of a single play"
 		} else {
-			"Corpus word frequencies"
-		}
+			"Word frequencies of all plays of an author"
+		} 
 	})
 
 	# render dynamic panel heading
-	output$wordfreqtitle <- renderText({
+	output$wordfreqpaneltitle <- renderText({
 		"<h4><u>Adjust the word frequency table</u></h4>"
 	})
 
+	# render HTML page with instructions on how to use table
+	output$wordfreqtext <- renderUI({
+		includeHTML(wordfreqhtml)
+	})
+
+	# render word frequency table
+	output$wordfreqtable<- DT::renderDataTable({
+		
+		lang <- input$corpus
+
+		## only one play ##
+		if (!isTRUE(input$checkbox_wholecorpus) & !isTRUE(input$checkbox_allplays)) {
+			spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
+									input$selectedplay, "/spoken-text")
+			playtext <- getplaytext(spokentexturl)
+
+
+
+			withProgress(message = 'Counting word frequencies', {
+				df = wordfreqdf(playtext, 
+								lang, 
+								remove_punct = input$checkbox_punctation,
+								tolower = input$checkbox_lowercase, 
+								remove_stopwords = input$checkbox_stopwords)
+			})
+
+			DT::datatable(df,
+						  filter = 'top', 
+						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
+						  				 orderClasses = TRUE,
+						  				 pageLength = 10))
+		
+		## all plays of an author ##
+		} else if (!isTRUE(input$checkbox_wholecorpus) & isTRUE(input$checkbox_allplays)) {
+			
+			playnames <- selectplays(corp(), input$selectedauthor)
+
+			n <- length(playnames)
+			dflist <- vector("list", n)
+
+			# progressbar for loading plays
+			withProgress(message = 'Loading plays', value = 0, {
+				
+				i <- 0
+				for(play in playnames) {
+					spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
+											play, "/spoken-text")
+					
+					playtext <- getplaytext(spokentexturl)
+					withProgress(message = 'Counting word frequencies', {
+						df <- wordfreqdf(playtext, 
+										lang, 
+										remove_punct = input$checkbox_punctation,
+										tolower = input$checkbox_lowercase, 
+										remove_stopwords = input$checkbox_stopwords)
+						
+					})
+
+					# Increment the progress bar, and update the detail text.
+					i <- i + 1
+		    		incProgress(1/n, detail = paste("Play", i, "of", n))
+
+		    		dflist[[i]] <- df
+
+				}
+
+			})
+
+			# combining all document-term-dataframes into one
+			withProgress(message = "Counting document frequencies", {
+				df <- Reduce(add_dfs, dflist)
+			})
+			
+
+			DT::datatable(df,
+						  filter = 'top', 
+						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
+						  				 orderClasses = TRUE,
+						  				 pageLength = 10))
+		} 
+	})
+
+	
 	# todo: label/choices ändern
+	# todo: überhaupt nötig?
 	output$wordfreqcontrols <- renderUI({
 		selectInput("selected_wordfreq_controls",
 					label = "Select something:",
 					choices = c("A" = 1, "B" = 2, "C" = 3))
 	})
 
-	# render word frequency table
-	output$wordfreqtable<- DT::renderDataTable({
-		# todo weg: placeholder
-		#mtcars
-		
+	
 
-		# todo: https://shiny.rstudio.com/articles/datatables.html
-
-		if (!isTRUE(input$checkbox_wholecorpus) & !isTRUE(input$checkbox_allplays)) {
-			# only one play
-			spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
-									input$selectedplay, "/spoken-text")
-			
-			# todo if
-			if (!isTRUE(input$checkbox_wholecorpus)) {
-				df = wordfreqdf(spokentexturl, lang, remove_stopwords = TRUE)
-			} else {
-				df = wordfreqdf(spokentexturl, lang)
-			}
-			DT::datatable(df,
-						  filter = 'top', 
-						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-						  				 orderClasses = TRUE,
-						  				 pageLength = 10))
-
-			
-
-		} else if (!isTRUE(input$checkbox_wholecorpus) & isTRUE(input$checkbox_allplays)) {
-			# all plays
-			# todo
-			DT::datatable(mtcars, 
-						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-						  				 orderClasses = TRUE,
-						  				 pageLength = 10))
-		} else {
-			# whole corpus
-			# todo
-			DT::datatable(mtcars, 
-						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-						  				 orderClasses = TRUE,
-						  				 pageLength = 10))
-		}
-		
-
-	})
+#################################################################################
+#################################################################################
+#################################################################################
+#################################################################################
+#################################################################################
 
 
 	#todo: weg, da nur test.
@@ -292,7 +358,13 @@ server <- function(input, output) {
 
 	})
 
-
+	###
+	#
+	# WORDCLOUD
+	# https://tutorials.quanteda.io/statistical-analysis/frequency/
+	# https://quanteda.io/articles/pkgdown/examples/plotting.html
+	#
+	###
 
 
 	### Render tab TODO ###
@@ -320,6 +392,7 @@ server <- function(input, output) {
 
 # Run the app
 options(shiny.port = 3000)
+options(shiny.autoreload = TRUE)
 options(shiny.launch.browser = TRUE)
 shinyApp(ui = ui, server = server)
 
