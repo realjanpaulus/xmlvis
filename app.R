@@ -1,6 +1,7 @@
 library(curl)
 library(docstring, warn.conflicts = FALSE)
 library(DT)
+library(ggplot2)
 library(jsonlite, warn.conflicts = FALSE)
 library(httr, warn.conflicts = FALSE)
 library(methods)
@@ -9,6 +10,8 @@ library(RColorBrewer)
 library(shiny, warn.conflicts = FALSE)
 library(shinycssloaders)
 library(shinythemes)
+#todo weg?
+#library(shinyWidgets)
 library(XML)
 source("utils.R")
 
@@ -26,6 +29,7 @@ urlcorpora <- "https://dracor.org/api/corpora"
 urlcorporashort <- "https://dracor.org/api/corpora/"
 
 # colorblind friendly color palettes
+color_point <- "#8DA0CB"
 colors_sequential <- brewer.pal(n = 8, name = 'PRGn')
 colors_sequential2 <- rev(brewer.pal(n = 8, name = 'PRGn'))
 colors_qualitative <- brewer.pal(n = 6, name = 'Set2')
@@ -60,20 +64,27 @@ ui <- fluidPage(theme = shinytheme("united"),
 				conditionalPanel(condition = "input.tabselected == 1",
 					uiOutput("statscontrols")
 				),
+				#todo
+				conditionalPanel(condition = "input.tabselected == 2",
+					uiOutput("wordfreqpaneltitle"),
+					uiOutput("radiobuttons_wordfreq"),
+					uiOutput("wordfreqtopfeatureslider")
+				),
 				# wordcloud panel
+				# todo: slider inputs auch als ui output
 				conditionalPanel(condition = "input.tabselected == 3",
 					conditionalPanel(condition = "input.checkbox_allplays == true",
 							uiOutput("wordcloudallplayspaneltitle"),
 							uiOutput("checkbox_wordcloud_comparison"),
 							conditionalPanel(condition = "input.checkbox_wordcloud_comparison == true",
 									sliderInput("wordcloud_label_size",
-												"Size of the labels:",
+												"Size of the play names:",
 												min = 1,
 												max = 4,
 												step = 0.1,
 												value = 2),
 									sliderInput("wordcloud_label_padding",
-												"Padding of the labels:",
+												"Padding of the play names:",
 												min = -0.2,
 												max = 0.2,
 												step = 0.01,
@@ -102,7 +113,7 @@ ui <- fluidPage(theme = shinytheme("united"),
 								step = 0.1,  
 								value = 0.1),
 					sliderInput("wordcloud_window_size",
-								"Window size:",
+								"Size:",
 								min = 1,
 								max = 2.2,
 								step = 0.1,
@@ -116,7 +127,8 @@ ui <- fluidPage(theme = shinytheme("united"),
 				".shiny-output-error { visibility: hidden; }",
 				".shiny-output-error:before { visibility: hidden; }"
 			),
-			tabsetPanel(id="tabselected",
+			tabsetPanel(
+				id="tabselected",
 				tabPanel(title = "Statistics", 
 						 uiOutput("statspage"), 
 						 value=1), 
@@ -125,7 +137,13 @@ ui <- fluidPage(theme = shinytheme("united"),
 						 fluidRow(
 							column(width=6, 
 								   style="padding-top: 22px;",
-								   DT::dataTableOutput(outputId = "wordfreqtable")),
+								   conditionalPanel(condition = "input.radiobuttons_wordfreq == 1",
+								        DT::dataTableOutput(outputId = "wordfreqtable")
+								   ),
+								   conditionalPanel(condition = "input.radiobuttons_wordfreq == 2",
+								        plotOutput(outputId = "wordfreqdistribution")
+							       ),
+						    ),
 							column(width=6, 
 								   style="padding-top: 0px; padding-right: 22px;",
 								   uiOutput("wordfreqtext")) 
@@ -349,13 +367,34 @@ server <- function(input, output) {
 		} 
 	})
 
+	output$radiobuttons_wordfreq <- renderUI({
+		radioButtons("radiobuttons_wordfreq",
+					label = "Select visualization method:", #todo: anderer name
+					choices = c("Table" = 1, "Distribution" = 2))
+	})
+
+	output$wordfreqtopfeatureslider <- renderUI({
+		sliderInput("wordfreqtopfeatureslider",
+					"Top n frequent features:",
+					min = 1,
+					max = 100,
+					step = 1,
+					value = 20)
+	})
+
+
+	output$wordfreqpaneltitle <- renderText({
+		"<h4><u>Word frequencies options</u></h4>"
+	})
+
+
 	# render HTML page with instructions on how to use table
 	output$wordfreqtext <- renderUI({
 		includeHTML(wordfreqhtml)
 	})
 
 	# render word frequency table
-	output$wordfreqtable<- DT::renderDataTable({
+	output$wordfreqtable <- DT::renderDataTable({
 		
 		lang <- input$corpus
 
@@ -387,7 +426,6 @@ server <- function(input, output) {
 			n <- length(playnames)
 			dflist <- vector("list", n)
 
-			# progressbar for loading plays
 			withProgress(message = 'Loading plays', value = 0, {
 				
 				i <- 1
@@ -423,6 +461,72 @@ server <- function(input, output) {
 										 orderClasses = TRUE,
 										 pageLength = 10))
 		} 
+	})
+
+	# render word frequency distribution 
+	output$wordfreqdistribution <- renderPlot({
+		lang <- input$corpus
+
+		## only one play ##
+		if (!isTRUE(input$checkbox_allplays)) {
+			spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
+									input$selectedplay, "/spoken-text")
+			playtext <- getplaytext(spokentexturl)
+
+			withProgress(message = 'Counting word frequencies', {
+				df <- frequency_distributiondf(playtext, 
+											   lang, 
+											   remove_punct = input$checkbox_punctation,
+											   tolower = input$checkbox_lowercase, 
+											   remove_stopwords = input$checkbox_stopwords,
+											   top_n_features = input$wordfreqtopfeatureslider)
+			})
+
+			#todo: das mit in die funktion?
+			ggplot(data = df, aes(x = feature, y = frequency)) + geom_point(colour=color_point) + 
+					theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+		
+		## all plays of an author ##
+		} else {
+			
+			playnames <- selectplays(corp(), input$selectedauthor)
+
+			n <- length(playnames)
+			allplays <- vector("list", n)
+
+			withProgress(message = 'Loading plays', value = 0, {
+				i <- 1
+				for(play in playnames) {
+					spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
+											play, "/spoken-text")
+					
+					playtext <- getplaytext(spokentexturl)
+					allplays[[i]] <- playtext
+
+					# Increment the progress bar, and update the detail text.
+					incProgress(1/n, detail = paste("Play", i, "of", n))
+					i <- i + 1
+
+				}
+			})
+
+			textobj <- paste(allplays, sep = "", collapse = "")
+
+			withProgress(message = 'Counting word frequencies', {
+				df <- frequency_distributiondf(textobj, 
+											   lang, 
+											   remove_punct = input$checkbox_punctation,
+											   tolower = input$checkbox_lowercase, 
+											   remove_stopwords = input$checkbox_stopwords,
+											   top_n_features = input$wordfreqtopfeatureslider) 
+			})
+
+			ggplot(data = df, aes(x = feature, y = frequency)) + geom_point(colour=color_point) + 
+					theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+		} 
+		
+		
 	})
 
 
@@ -463,15 +567,17 @@ server <- function(input, output) {
 	# render comparison checkbox
 	output$checkbox_wordcloud_comparison <- renderUI({
 		checkboxInput("checkbox_wordcloud_comparison",
-					  label = span("Compare play wordclouds", 
-					  				tags$br(), 
-					  				tags$u("Notes:"), 
-					  				tags$ul(
-						  				tags$li("Only the first 8 plays 
-						  						can be compared."),
-						  				tags$li("Authors with only one play 
-						  						won't plot a comparison wordcloud.")
-					  				) 
+					  label = span("Compare play wordclouds" 
+					  				# tags$br(), 
+					  				# tags$u("Notes:"), 
+					  				# tags$ul(
+						  			# 	tags$li("Only the first 8 plays 
+						  			# 			can be compared."),
+						  			# 	tags$li("Authors with only one play 
+						  			# 			won't plot a comparison wordcloud. 
+						  			# 			Instead, a normal wordcloud of 
+						  			# 			all plays is plotted.")
+					  				#) 
 			  		  ), 
 			  		  value = FALSE)
 	})
@@ -487,7 +593,6 @@ server <- function(input, output) {
 			spokentexturl <- paste0(urlcorpora, "/", input$corpus, "/play/", 
 									input$selectedplay, "/spoken-text")
 			playtext <- getplaytext(spokentexturl)
-
 			withProgress(message = 'Generating word cloud', {
 				wordcloudplot(playtext, 
 							  lang, 
@@ -529,32 +634,33 @@ server <- function(input, output) {
 				}
 				textobj <- corpus(unlist(allplays, use.names=TRUE))
 				colors <- colors_qualitative
+				comparison_check = TRUE
 			} else {
-				textobj <- paste(allplays, collapse = " ")
+				textobj <- paste(allplays, sep = "", collapse = "")
 				colors <- colors_sequential2
+				comparison_check = FALSE
 			}
 
-			if (length(allplays) > 1) {
-				withProgress(message = 'Generating word cloud', {
-					wordcloudplot(textobj, 
-								  lang, 
-								  remove_punct = input$checkbox_punctation,
-								  tolower = input$checkbox_lowercase, 
-								  remove_stopwords = input$checkbox_stopwords,
-								  color = colors,
-								  comparison = input$checkbox_wordcloud_comparison,
-								  labeloffset = input$wordcloud_label_padding,
-								  labelsize = input$wordcloud_label_size,
-								  max_words = input$wordcloud_max_n_words,
-								  min_freq= input$wordcloud_min_freq,
-								  word_padding = input$wordcloud_word_padding)
-				})
-			}
+			
+			withProgress(message = 'Generating word cloud', {
+				wordcloudplot(textobj, 
+							  lang, 
+							  remove_punct = input$checkbox_punctation,
+							  tolower = input$checkbox_lowercase, 
+							  remove_stopwords = input$checkbox_stopwords,
+							  color = colors,
+							  comparison = comparison_check,
+							  labeloffset = input$wordcloud_label_padding,
+							  labelsize = input$wordcloud_label_size,
+							  max_words = input$wordcloud_max_n_words,
+							  min_freq= input$wordcloud_min_freq,
+							  word_padding = input$wordcloud_word_padding)
+			})
+			
 		} 
 	}, 
 	height=function(){300*input$wordcloud_window_size},
 	width=function(){300*input$wordcloud_window_size})
-
 
 	
 

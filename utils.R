@@ -4,6 +4,7 @@ library(DT)
 library(jsonlite, warn.conflicts = FALSE)
 library(methods)
 library(quanteda, warn.conflicts = FALSE)
+library("quanteda.textplots", warn.conflicts = FALSE)
 library("quanteda.textstats", warn.conflicts = FALSE)
 library(shiny, warn.conflicts = FALSE)
 library(shinythemes)
@@ -146,6 +147,30 @@ get_stopwords <- function(lang) {
 	return(stopwords(output, source=src))
 }
 
+
+##################
+# tool functions #
+##################
+
+frequency_distributiondf <- function(textobj, lang, 
+								   remove_punct = TRUE,
+						  		   tolower = TRUE, 
+						  		   remove_stopwords = FALSE,
+						  		   top_n_features = 100) {
+	#' TODO
+	#'
+	#'
+	df <- wordfreqdf(textobj, lang, 
+					 remove_punct = remove_punct,
+					 tolower = tolower, 
+					 remove_stopwords = remove_stopwords,
+					 top_n_features = top_n_features)
+
+	df$feature <- with(df, reorder(feature, -frequency))
+
+	return(df)
+}
+
 wordcloudplot <- function(textobj, lang, 
 						  remove_punct = TRUE,
 						  tolower = TRUE, 
@@ -188,18 +213,22 @@ wordcloudplot <- function(textobj, lang,
 					   	 remove_stopwords = remove_stopwords)
 
 	return(textplot_wordcloud(df,
-							  comparison = comparison,
 							  adjust = word_padding * -1,
+							  color = colors,
+							  comparison = comparison,
 							  labeloffset = labeloffset,
 							  labelsize = labelsize,
 							  max_words = max_words,
-							  min_count = min_freq,
-							  color = colors))
+							  min_count = min_freq))
 }
 
-wordfreqdf <- function(textobj, lang, remove_punct = TRUE,
-					   tolower = TRUE, remove_stopwords = FALSE) {
-	#' Extracts term and document frequencies from a plain text or a quanteda corpus object.
+wordfreqdf <- function(textobj, lang, 
+					   remove_punct = TRUE,
+					   tolower = TRUE, 
+					   remove_stopwords = FALSE,
+					   top_n_features = NULL) {
+	#' Extracts term and document frequencies from a plain text 
+	#' or a quanteda corpus object.
 	#'
 	#' Takes plain text of a play or a quanteda corpus object 
 	#' and creates a dataframe with term and document frequencies of the text. 
@@ -210,6 +239,7 @@ wordfreqdf <- function(textobj, lang, remove_punct = TRUE,
 	#' @param remove_punct boolean value if punctation should be removed.
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_stopwords boolean value if stopwords should be removed.
+	#' @param top_n_features numerical value which indicates the top n features.
 	
 
 	df <- documenttermdf(textobj, lang, 
@@ -218,7 +248,7 @@ wordfreqdf <- function(textobj, lang, remove_punct = TRUE,
 					   	 remove_stopwords = remove_stopwords)
 	
 
-	return(subset(textstat_frequency(df), select=-c(rank, group)))
+	return(subset(textstat_frequency(df, n=top_n_features), select=-c(rank, group)))
 }
 
 
