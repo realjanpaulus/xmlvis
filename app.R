@@ -10,6 +10,7 @@ library(RColorBrewer)
 library(shiny, warn.conflicts = FALSE)
 library(shinycssloaders)
 library(shinythemes)
+library(shinyWidgets)
 library(XML)
 source("utils.R")
 
@@ -17,7 +18,9 @@ source("utils.R")
 ### global variables ###
 
 about <- "www/about.html"
+kwichtml <- "www/kwictext.html"
 more <- "www/more.html"
+statisticshtml <- "www/statistics.html"
 wordcloudhtml <- "www/wordcloudtext.html"
 wordfreqhtml <- "www/wordfreqtext.html"
 
@@ -45,30 +48,39 @@ ui <- fluidPage(theme = shinytheme("united"),
 			verticalLayout(
 				uiOutput("select_corpora"),
 				uiOutput("select_authors"),
-				# only renders play selection if the "Use all plays" checkbox 
-				# is not activated
-				conditionalPanel(condition = "input.checkbox_allplays == false",
-					uiOutput("select_plays")
+				
+				conditionalPanel(condition = "input.statstabselected != 'stats_tab_playlength' && 
+												input.statstabselected != 'stats_tab_ld' && 
+												input.statstabselected != 'stats_tab_tr'",
+					# only renders play selection if the "Use all plays" checkbox 
+					# is not activated
+					conditionalPanel(condition = "input.checkbox_allplays == false",
+						uiOutput("select_plays")
+					),
+					uiOutput("checkbox_allplays")
 				),
-				uiOutput("checkbox_allplays"),
+				conditionalPanel(condition = "input.statstabselected == 'stats_tab_playlength' || 
+												input.statstabselected == 'stats_tab_ld' ||
+												input.statstabselected == 'stats_tab_tr'",
+			
+					uiOutput("substitute_text_allplays")
+				),
 				conditionalPanel(condition = "input.tabselected != 'reader'",
-					uiOutput("textpreprocessingtitle"),
-					# todo: das weg?
-					conditionalPanel(condition = "input.tabselected != 'kwic' && input.tabselected != 'reader'",
-						uiOutput("checkbox_stopwords")
-					),	
+					uiOutput("textpreprocessing_title"),	
+					uiOutput("checkbox_stopwords"),
 					uiOutput("checkbox_punctation"),
 					uiOutput("checkbox_lowercase")
 				),
 				tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))
 			),
 			wellPanel(
-				#todo: überarbeiten!! weg?
-				# conditionalPanel(condition = "input.tabselected == 'stats'",
-				# 	uiOutput("stats_panel_title"),
-				# 	uiOutput("stats_checkbox_unique_words")
-				# 	# todo
-				# ),
+				# statistics panel
+				conditionalPanel(condition = "input.tabselected == 'stats'",
+					uiOutput("stats_panel_title"),
+					uiOutput("stats_select_lexical_diversity"),
+					uiOutput("stats_select_readability")
+				),
+				# wordfrequency distribution panel
 				conditionalPanel(condition = "input.tabselected == 'freq' && input.wordfreqtabselected == 'Distribution'",
 					uiOutput("wordfreq_panel_title"),
 					uiOutput("wordfreq_top_feature_slider")
@@ -90,15 +102,17 @@ ui <- fluidPage(theme = shinytheme("united"),
 					uiOutput("wordcloud_word_padding"),
 					uiOutput("wordcloud_window_size")	
 				),
+				# kwic panel
 				conditionalPanel(condition = "input.tabselected == 'kwic'",
 					uiOutput("kwic_panel_title"),
-					uiOutput("kwic_checkbox_alphabetical"),
+					uiOutput("kwic_window_slider"),
+					uiOutput("kwic_radio_sorting"),
 					uiOutput("kwic_select_token")
 				)
-				
 			)
 		),
 		mainPanel(
+			# some styling
 			tags$style(type="text/css",
 				".shiny-output-error { visibility: hidden; }",
 				".shiny-output-error:before { visibility: hidden; }",
@@ -114,51 +128,69 @@ ui <- fluidPage(theme = shinytheme("united"),
 			tabsetPanel(
 				id="tabselected",
 				tabPanel(title = "Statistics", 
-							titlePanel(uiOutput("stats_title")),
 							fluidRow(
 								column(width=6, 
-									   style="padding-top: 10px;",
-									   DT::dataTableOutput(outputId = "stats_table")
-									   )
-							    ),
-							    #TODO!!!! html machen
+										style="padding-top: 0px;",
+										titlePanel(uiOutput("stats_title")),
+										br(),
+										tabsetPanel(id="statstabselected",
+											tabPanel(title = "Overview table", 
+													value = "stats_tab_table",
+													br(),
+													DT::dataTableOutput(outputId = "stats_table")),
+								   			tabPanel(title = "Play lengths comparison",
+								   					value = "stats_tab_playlength",
+									   				br(),
+									   				plotOutput(outputId = "stats_plot_playlength")),									   		
+									   		tabPanel(title = "Lexical diversity plot",
+									   				value = "stats_tab_ld",
+									   			br(),
+									   			plotOutput(outputId = "stats_plot_ld")),
+									   		tabPanel(title = "Text readability plot",
+									   				value = "stats_tab_tr",
+									   				br(),
+									   				plotOutput(outputId = "stats_plot_tr"))   	
+										)
+							    	),
 								column(width=6, 
-									   style="padding-top: 0px; padding-right: 22px;",
-									   uiOutput("")
+									   style="padding-top: 5px; padding-right: 22px;",
+									   uiOutput("stats_text"))
 							),							
 						 	value = "stats"),
 				tabPanel(title = "Reader",
 						 titlePanel(uiOutput("reader_title")),
+						 br(),
 						 uiOutput("reader_text"),
 						 value = "reader"),
 				tabPanel(title = "Word frequencies", 
-						 titlePanel(uiOutput("wordfreqtitle")),
-						 fluidRow(
+						fluidRow(
 							column(width=6, 
-								   style="padding-top: 10px;",
-								   tabsetPanel(
-								   		id="wordfreqtabselected",
+								   style="padding-top: 0px;",
+								   titlePanel(uiOutput("wordfreqtitle")),
+								   br(),
+								   tabsetPanel(id="wordfreqtabselected",
 								   		tabPanel(title = "Table",
-								   				 br(),
-								   				 DT::dataTableOutput(outputId = "wordfreqtable")
+								   				br(),
+								   				DT::dataTableOutput(outputId = "wordfreq_table")
 								   				),
 								   		tabPanel(title = "Distribution",
 								   				 br(),
-								   				 plotOutput(outputId = "wordfreqdistribution")
+								   				 plotOutput(outputId = "wordfreq_distribution")
 								   				 )
 								   )
 						    ),
 							column(width=6, 
-								   style="padding-top: 0px; padding-right: 22px;",
-								   uiOutput("wordfreqtext")) 
+								   style="padding-top: 5px; padding-right: 22px;",
+								   uiOutput("wordfreq_text")) 
 						 ),
 						 value="freq"),
 				tabPanel(title = "Wordcloud", 
-						 titlePanel(uiOutput("wordcloud_title")),
 						 fluidRow(
 							column(width=6,
-								   align="center",
-								   style="padding-top: 10px;",
+								   align="left",
+								   style="padding-top: 0px;",
+								   titlePanel(uiOutput("wordcloud_title")),
+								   br(),
 								   conditionalPanel(condition = "input.checkbox_allplays == true",
 										tabsetPanel(
 											id="wordcloudtabselected",
@@ -172,21 +204,22 @@ ui <- fluidPage(theme = shinytheme("united"),
 								   			  inline = TRUE)
 							),
 							column(width=6,
-								   style="padding-top: 0px; padding-right: 22px;",
+								   style="padding-top: 5px; padding-right: 22px;",
 								   uiOutput("wordcloud_text")) 
 						 ),
 						 value="cloud"),
 				tabPanel(title = "KWIC",
-						titlePanel(uiOutput("kwic_title")),
 						fluidRow(
-							column(width=8,
-								   align="center",
+							column(width=6,
+								   align="left",
 								   style="padding-top: 10px;",
+								   titlePanel(uiOutput("kwic_title")),
+								   br(),
 								   DT::dataTableOutput(outputId = "kwic_table")
 							),
-							column(width=4,
-								   style="padding-top: 0px; padding-right: 22px;",
-								   uiOutput("")) #todo: andere html!!!
+							column(width=6,
+								   style="padding-top: 5px; padding-right: 22px;",
+								   uiOutput("kwic_text"))
 						),
 						value="kwic"),
 				tabPanel(title = "About", includeHTML(about), value="about"),
@@ -246,11 +279,16 @@ server <- function(input, output) {
 					  value = FALSE)
 	})
 
+	# render all plays substitute text
+	output$substitute_text_allplays <- renderText({
+		"<h5><i><u>Note</u>: Using all plays by default</i></h5>"
+	})
+
 	##################################
 	### Text preprocessing options ###
 	##################################
 
-	output$textpreprocessingtitle <- renderText({
+	output$textpreprocessing_title <- renderText({
 		"<h4><u>Text preprocessing options</u></h4>"
 	})
 
@@ -276,24 +314,11 @@ server <- function(input, output) {
 	})
 
 
-	###########################################
-	### Render tab: Plays/corpus statistics ###
-	###########################################
+	######################################
+	### Render tab: Play(s) statistics ###
+	#######################################
 
-	# TODO!!!
-
-	# render tab name dynamically
-	# todo: different name, see render tab 2
-	# output$statspanel <- renderText({
-	# 	if (!isTRUE(input$checkbox_allplays)) {
-	# 		"Play statistics <br/>(Single play)"
-	# 	} else {
-	# 		"Plays statistics <br/>(All plays)"
-	# 	}
-	# })
-
-
-
+	
 	# render dynamic tab title
 	output$stats_title <- renderText({
 		if (!isTRUE(input$checkbox_allplays)) {
@@ -303,25 +328,54 @@ server <- function(input, output) {
 		} 
 	})
 
+	# render HTML page with instructions on how to use stats table
+	output$stats_text <- renderUI({
+		includeHTML(statisticshtml)
+	})
 
 	# render statistics panel title
-	#todo weg?
-	# output$stats_panel_title <- renderText({
-	# 	"<h4><u>Statistics options</u></h4>"
-	# })
+	output$stats_panel_title <- renderText({
+		"<h4><u>Statistics options</u></h4>"
+	})
 
+	# render lexical diversity measure selection
+	output$stats_select_lexical_diversity <- renderUI({
+		if (is.null(corp() )) return(NULL)
+		selectInput("stats_select_lexical_diversity",
+					label = "Measure for the lexical diversity:",
+					choices = c("TTR: Token-Type Ratio", 
+								"C: Herdan's C", 
+								"R: Root TTR", 
+								"CTTR: Corrected TTR", 
+								"U: Uber Index", 
+								"S: Summers Index", 
+								"K: Yule's K", 
+								"I: Yule's I", 
+								"D: Simpson's D", 
+								"Vm: Herdan's Vm", 
+								"Maas: Maas indices", 
+								"MATTR: Moving-Average Type-Token Ratio", 
+								"MSTTR: Mean Segmental Type-Token Ratio"))
+	})
 
-	# todo: weg
-	# output$stats_checkbox_unique_words <- renderUI({
-	# 	checkboxInput("stats_checkbox_unique_words",
-	# 				  label = "Use only unique words",
-	# 				  value = FALSE)
-	# })
-
-
-	# render statistics page
-	# todo
-	output$stats_table<- DT::renderDataTable({
+	# render readability measure selection
+	output$stats_select_readability <- renderUI({
+		if (is.null(corp() )) return(NULL)
+		selectInput("stats_select_readability",
+					label = "Measure for the text readability:",
+					choices = c("ARI", "ARI.simple", "Bormuth.MC", "Bormuth.GP", "Coleman", "Coleman.C2",
+							"Coleman.Liau.ECP", "Coleman.Liau.grade", "Coleman.Liau.short", 
+							"Dale.Chall", "Dale.Chall.Old", "Dale.Chall.PSK", "Danielson.Bryan", 
+							"Danielson.Bryan.2", "Dickes.Steiwer", "DRP", "ELF", "Farr.Jenkins.Paterson",
+							"Flesch", "Flesch.PSK", "Flesch.Kincaid", "FOG", "FOG.PSK", "FOG.NRI",
+							"FORCAST", "FORCAST.RGL", "Fucks", "Linsear.Write", "LIW", "nWS", "nWS.2",
+							"nWS.3", "nWS.4", "RIX", "Scrabble", "SMOG", "SMOG.C", "SMOG.simple",
+							"SMOG.de", "Spache", "Spache.old", "Strain", "Traenkle.Bailer", "Traenkle.Bailer.2",
+							"Wheeler.Smith", "meanSentenceLength", "meanWordSyllables"))
+	})
+	
+	# render statistics table
+	output$stats_table <- DT::renderDataTable({
 		lang <- input$selectedcorpus
 
 		## only one play ##
@@ -362,7 +416,8 @@ server <- function(input, output) {
 							remove_punct = input$checkbox_punctation,
 							tolower = input$checkbox_lowercase, 
 							remove_stopwords = input$checkbox_stopwords,
-							unique_words = input$stats_checkbox_unique_words)
+							lexical_diversity_measure = input$stats_select_lexical_diversity,
+							readability_measure = input$stats_select_readability)
 		
 		withProgress(message = 'Loading plays', value = 0, {
 			DT::datatable(df, 
@@ -372,7 +427,48 @@ server <- function(input, output) {
 		})
 	})
 
+	# render play length plot
+	output$stats_plot_playlength <- renderPlot({
 
+	})
+
+	# render lexical diversity plot
+	output$stats_plot_ld <- renderPlot({
+
+		lang <- input$selectedcorpus
+		ld_measure <- get_lexical_diversity_name(input$stats_select_lexical_diversity)
+
+		playnames <- selectplays(corp(), input$selectedauthor)
+		n <- length(playnames)
+		allplays <- list()
+
+		withProgress(message = 'Loading plays', value = 0, {
+			i <- 1
+			for(play in playnames) {
+				playtext <- get_text(corpusobj = input$selectedcorpus,
+										url = urlcorpora,
+										play_name = play)
+				playtokens <- get_tokens(playtext, lang,
+										remove_punct = input$checkbox_punctation,
+										tolower = input$checkbox_lowercase, 
+										remove_stopwords = input$checkbox_stopwords)
+				playname <- names(playnames)[[i]]
+				allplays[[playname]] <- textstat_lexdiv(playtokens, measure = ld_measure)[[2]]
+				
+				# Increment the progress bar, and update the detail text.
+					incProgress(1/n, detail = paste("Play", i, "of", n))
+					i <- i + 1
+
+			}
+		})
+	
+		lexical_diversity_distribution(allplays, ld_measure)
+	})
+
+	# render text readability plot
+	output$stats_plot_tr <- renderPlot({
+
+	})
 
 
 
@@ -390,6 +486,7 @@ server <- function(input, output) {
 		
 	})
 
+	# render reader text
 	output$reader_text <- renderUI({
 		lang <- input$selectedcorpus
 
@@ -398,7 +495,6 @@ server <- function(input, output) {
 			textobj <- get_text(corpusobj = input$selectedcorpus,
 									url = urlcorpora,
 									play_name = input$selectedplay)
-
 		## all plays of an author ##
 		} else {
 
@@ -424,15 +520,9 @@ server <- function(input, output) {
 			})
 
 			textobj <- paste(allplays, sep = "", collapse = "")
-
 		} 
 
-		#todo
-		#HTML(textobj)
 		HTML(gsub("\n", "<br>", textobj))
-		#textobj
-
-
 	})
 
 	
@@ -466,13 +556,12 @@ server <- function(input, output) {
 
 
 	# render HTML page with instructions on how to use table
-	output$wordfreqtext <- renderUI({
+	output$wordfreq_text <- renderUI({
 		includeHTML(wordfreqhtml)
 	})
 
 	# render word frequency table
-	output$wordfreqtable <- DT::renderDataTable({
-		
+	output$wordfreq_table <- DT::renderDataTable({
 		lang <- input$selectedcorpus
 
 		## only one play ##
@@ -497,11 +586,9 @@ server <- function(input, output) {
 						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
 										 orderClasses = TRUE,
 										 pageLength = 10),
-						  selection = "none")
-		
+						  selection = "none")	
 		## all plays of an author ##
 		} else {
-			
 			playnames <- selectplays(corp(), input$selectedauthor)
 
 			n <- length(playnames)
@@ -545,7 +632,7 @@ server <- function(input, output) {
 	})
 
 	# render word frequency distribution 
-	output$wordfreqdistribution <- renderPlot({
+	output$wordfreq_distribution <- renderPlot({
 		lang <- input$selectedcorpus
 
 		## only one play ##
@@ -787,29 +874,48 @@ server <- function(input, output) {
 		"KWIC (= Keywords in context)"
 	})
 
+	# render HTML page with instructions on how to use KWIC
+	output$kwic_text <- renderUI({
+		includeHTML(kwichtml)
+	})
 
-	# TODO: panel
-	# - optionales filtering
-	# - auswahl von allen tokens
-	# 	- alphabetisch
-	# 	- häufigste wörter
-	# - stopword removal und so weiter
-	# - docname anders
 
 	# render panel title
 	output$kwic_panel_title <- renderText({
 		"<h4><u>KWIC options</u></h4>"
 	})
 
-	output$kwic_checkbox_alphabetical <- renderUI({
-		checkboxInput("kwic_checkbox_alphabetical",
-					  label = "Use alphabetical list",
-					  value = FALSE)
+
+	# render kwic sorting radio buttons
+	output$kwic_radio_sorting <- renderUI({
+		radioButtons("kwic_radio_sorting",
+					  label = "Select sorting method:",
+					  choices = c("alphabetical", "most frequent words"),
+					  selected =  "most frequent words")
 	})
 
+	# render kwic word window slider
+	output$kwic_window_slider <- renderUI({
+		sliderInput("kwic_window_slider",
+					"Number of words before/after keyword",
+					min = 1,
+					max = 20,
+					step = 1,
+					value = 5)
+	})
 
-	# TODO!
-	# -  todo: standard wort selecten, in utils.R
+	# render wordcloud window size panel entry
+	# EXPAND: higher max slider?
+	output$wordcloud_window_size <- renderUI({
+		sliderInput("wordcloud_window_size",
+					"Size:",
+					min = 1,
+					max = 2.2,
+					step = 0.1,
+					value = 1.8)
+	})
+
+	# render token selection
 	output$kwic_select_token <- renderUI({
 
 		lang <- input$selectedcorpus
@@ -823,7 +929,7 @@ server <- function(input, output) {
 			n <- length(playnames)
 			allplays <- vector("list", n)
 
-			
+			i <- 1
 			for(play in playnames) {
 				playtext <- get_text(corpusobj = input$selectedcorpus,
 										url = urlcorpora,
@@ -835,25 +941,31 @@ server <- function(input, output) {
 		}
 
 
-
-		# TODO: stopwords klappen jetzt auch!!!
-		if(isTRUE(input$kwic_checkbox_alphabetical)) {
+		# select sorting method ("alphabetical" or "frequency")
+		if(input$kwic_radio_sorting == "alphabetical") {
 			token_list <- get_tokens(textobj,
 									lang,
-									remove_punct = input$checkbox_punctation,
 									tolower = input$checkbox_lowercase,
+									remove_punct = input$checkbox_punctation,
+									remove_stopwords = input$checkbox_stopwords,
 									sort_by = "alphabetical")
-		} else {
+		} else if (input$kwic_radio_sorting == "most frequent words") {
 			token_list <- get_tokens(textobj,
 									lang,
-									remove_punct = input$checkbox_punctation,
 									tolower = input$checkbox_lowercase,
-									sort_by = "frequency")
+									remove_punct = input$checkbox_punctation,
+									remove_stopwords = input$checkbox_stopwords,
+									sort_by = "mfw+")
+
+
 		}
 
-		selectInput("kwic_select_token",
-					label = "Select a word:",
-					choices = token_list)
+		selectizeInput("kwic_select_token",
+					label = "Select a keyword:",
+					choices = token_list,
+					# EXPAND: for plays/combined plays with a higher token count
+					options = list(maxOptions = 500000), 
+					selected = "")
 	})
 
 	
@@ -862,31 +974,20 @@ server <- function(input, output) {
 	output$kwic_table <- DT::renderDataTable({
 
 		lang <- input$selectedcorpus
+		textobj <- ""
+		docname <- ""
 
 		## only one play ##
 		if (!isTRUE(input$checkbox_allplays)) {
-			playtext <- get_text(corpusobj = input$selectedcorpus,
+			textobj <- get_text(corpusobj = input$selectedcorpus,
 									url = urlcorpora,
 									play_name = input$selectedplay)
-
-
-			# todo: anderes pattern
-			withProgress(message = 'Counting word frequencies', {
-				df <- kwic_df(playtext, 
-								lang,
-								pattern = input$kwic_select_token,
-								remove_punct = input$checkbox_punctation,
-								tolower = input$checkbox_lowercase)
-			})
-
-			#todo: mehr optionen
-			DT::datatable(df, filter = "top",
-						options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-									   pageLength = 5))
+			playnames <- selectplays(corp(), input$selectedauthor)
+			docname <- names(playnames)[playnames == input$selectedplay]
+			
 
 		## all plays of an author ##
 		} else {
-			
 			playnames <- selectplays(corp(), input$selectedauthor)
 			n <- length(playnames)
 			allplays <- vector("list", n)
@@ -908,24 +1009,26 @@ server <- function(input, output) {
 
 			if (length(allplays) > 1) {
 				names(allplays) <- names(playnames)
-
 				textobj <- corpus(unlist(allplays, use.names=TRUE))
 			} else {
 				textobj <- paste(allplays, sep = "", collapse = "")
+				docname <- names(playnames)[[1]]
 			}
-
-			# todo: anderes pattern
-			withProgress(message = 'Counting word frequencies', {
-				df <- kwic_df(textobj, 
-								lang,
-								pattern = input$kwic_select_token,
-								remove_punct = input$checkbox_punctation,
-								tolower = input$checkbox_lowercase)
-			})
-			DT::datatable(df, filter = "top",
-							options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-							pageLength = 5))
 		} 
+
+		withProgress(message = 'Counting word frequencies', {
+			df <- kwic_df(textobj, 
+							lang,
+							pattern = sub(" *\\(.*", "", input$kwic_select_token),
+							window = input$kwic_window_slider,
+							docname = docname,
+							tolower = input$checkbox_lowercase,
+							remove_punct = input$checkbox_punctation)
+		})
+
+		DT::datatable(df, filter = "top",
+					options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
+								   pageLength = 5))
 	})
 
 

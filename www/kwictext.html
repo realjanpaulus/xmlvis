@@ -1,0 +1,65 @@
+<html>
+<head>
+	<style>
+		.continuoustext {
+				font-size: 16px;
+			}
+
+		.empty {
+		    margin-bottom: 20px;
+		}
+
+		.line {
+			padding-top: 10px;
+			border-top: 1px solid rgb(217, 217, 217);
+		}
+
+		b.grey {
+			background-color:#e6e6e6;
+		}
+
+		b.lightgrey {
+			background-color:#f5f5f5;
+		}
+
+		p {
+			margin-top: 10px;
+		}
+		
+	</style>
+</head>
+<body>
+	<div>
+		<h3>What is a KWIC?</h3>
+		<div class="continuoustext">
+			<b class="grey">KWIC</b> (= <b class="grey">K</b>ey<b class="grey">w</b>ords <b class="grey">i</b>n <b class="grey">C</b>ontext) is the most common format for concordance lines and shows the <b class="lightgrey">context</b> of a word within a text. It is often displayed as a table like the one on the left. This table shows the keywords (<i>keywords</i> in table), the text immediately before the keyword (<i>pre</i> in table) and immediately after the keyword (<i>post</i> in table), and often also the places/indices where the keyword occurs in the text (<i>from</i> and <i>to</i> in table). The latter is especially interesting for phrases or sentences.
+		</div>
+		<h3>How to use</h3>
+		<div class="continuoustext">
+			<p>
+				The <b class="grey">KWIC</b> table of a play or all plays of an author are calculated here. For the latter, the checkbox <i>"Use all plays"</i> must be selected in the panel on the left. General options such as <i>stop word consideration</i>, <i>punctuation removal</i> and <i>lowercase conversion of words</i> can be selected in the left panel. <u>Note</u>: Here, the checkbox <i>Remove stopwords</i> only refers to the listing of stopwords in the keyword list. No stopwords are removed from the "pre" and "post" columns. Special options like the <i>window size</i> (number of words before/after the keyword), the <i>sorting method</i> (sorting of the available keywords by an <i>alphabetical</i> order or by the <i>most frequent words</i> in descending order according to the largest frequency, shown in parantheses behind the word) or the <i>keyword selection</i> can be found in the lower left panel.
+			</p>
+			<p>
+				The <b class="grey">KWIC</b> table on the left consists of five columns:
+				<ul>
+					<li><b class="lightgrey">docname</b>: Name of the play. Especially important to distinguish the plays when "Use all plays" is selected.</li>
+					<li><b class="lightgrey">from/to</b>: Place in the text where the keyword begins and ends. Since no phrases are supported in this tool, "from" and "to" are identical.</li>
+					<li><b class="lightgrey">pre</b>: The phrase/sentence immediately before the keyword.</li>
+					<li><b class="lightgrey">keyword</b>: The selected keyword.</li>
+					<li><b class="lightgrey">post</b>: The phrase/sentence immediately after the keyword.</li>
+				</ul>
+			</p>
+			<p>
+				It is possible to search for specific column values in the table using the search masks under the respective column names or for values in the whole table using the search bar at the top. <i>"Show n entries"</i> can be used to increase the number of table entries per page. Below the table, information on all entries is given and a page turning function is provided.
+			</p>
+		</div>
+		<p>
+			<div class="continuoustext">	
+				<u>Note</u>: For authors with multiple plays, it may take a short time to calculate the KWIC table.
+			</div>
+		</p>		
+	</div>
+	<div class="line"/>
+	<div class="empty"/>
+</body>
+</html>

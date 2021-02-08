@@ -124,6 +124,30 @@ documenttermdf <- function(textobj, lang,
 	return(df)
 }
 
+
+get_lexical_diversity_name <- function(lexical_diversity_measure) {
+	#' Returns correct lexical diversity measure string.
+	#'
+	#' Takes a string and checks if it's a valid string for the measure parameter of
+	#' the quanteda lexical diversity function.
+	#'  
+	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
+	#'		  All available options can be found here: 
+	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
+	ld_measure_options <- c("TTR", "C", "R", "CTTR", "U", "S", "K", "I", "D", "Vm", "Maas", "MATTR", "MSTTR")
+	names(ld_measure_options) <- c("TTR: Token-Type Ratio", "C: Herdan's C", "R: Root TTR", "CTTR: Corrected TTR", 
+						"U: Uber Index", "S: Summers Index", "K: Yule's K", "I: Yule's I", "D: Simpson's D", 
+						"Vm: Herdan's Vm", "Maas: Maas indices", "MATTR: Moving-Average Type-Token Ratio", 
+						"MSTTR: Mean Segmental Type-Token Ratio")
+	if (isTRUE(lexical_diversity_measure %in% ld_measure_options)) {
+		return(lexical_diversity_measure)
+	} else if (isTRUE(lexical_diversity_measure %in% names(ld_measure_options))) {
+		return(getElement(ld_measure_options, lexical_diversity_measure))
+	} else {
+		return("TTR: Token-Type Ratio")
+	}
+}
+
 get_stopwords <- function(lang) {
 	#' Get a list of stopwords by its language.
 	#'
@@ -158,17 +182,28 @@ get_text <- function(corpusobj, url, play_name) {
 }
 
 
-# todo
 get_tokens <- function(textobj,
 						lang,
 						tolower = TRUE,
 						remove_punct = TRUE,
 						remove_stopwords = TRUE,
 						sort_by = "") {
+	#' Get quanteda token object from a text object.
 	#'
-	#' TODO
+	#' Takes a text object and creates a (sorted) quanteda tokens object. 
 	#'
+	#' @param textobj text as string.
+	#' @param lang language identificator as string.
+	#' @param remove_punct boolean value if punctation should be removed.
+	#' @param tolower boolean value if words should be converted to lowercase.
+	#' @param remove_stopwords boolean value if stopwords should be removed.
+	#' @param sort_by string to indicate sorting method. Available options are
+	#'		  'alphabetical', 'mfw' (= most frequent words in descending order), 
+	#'		  'mfw+' (= mfw + frequency in parantheses) or an empty or another string 
+	#'		  which means no sorting will be used. 
+
 	toks <- tokens(textobj, remove_punct = remove_punct)
+
 	if (isTRUE(tolower)) {
 		toks <- tokens_tolower(toks)
 	}
@@ -177,13 +212,34 @@ get_tokens <- function(textobj,
 		toks <- tokens_remove(toks, pattern = get_stopwords(lang))
 	}
 
+	# alphabetical order
 	if(isTRUE(sort_by == "alphabetical")) {
-		# todo: hier gibts fehlermeldung
-		toks <- str_sort(c(toks), numeric = TRUE)
-	} else if (isTRUE(sort_by == "frequency")) {
-		#todo
-		toks <- toks
+		toks <- str_sort(unlist(toks), numeric = TRUE)
+
+	# most frequent words in descending order
+	} else if (isTRUE(sort_by == "mfw")) {
+		df <- wordfreqdf(textobj, lang, 
+							remove_punct = remove_punct,
+							tolower = tolower, 
+							remove_stopwords = remove_stopwords)
+		toks <- c(df[["feature"]])
+	# most frequent words + their frequency in parantheses in descending order
+	} else if (isTRUE(sort_by == "mfw+")) {
+		df <- wordfreqdf(textobj, lang, 
+							remove_punct = remove_punct,
+							tolower = tolower, 
+							remove_stopwords = remove_stopwords)
+		
+		toks <- list()
+		toks_mfw <- c(df[["feature"]])
+		toks_freq <- c(df[["frequency"]])
+		i <- 1
+		for(element in toks_mfw) {
+			toks[[i]] <- paste0(toks_mfw[[i]], " (", toks_freq[[i]], ")")
+			i <- i+1
+		}
 	}
+
 	return(toks)
 }
 
@@ -191,26 +247,6 @@ get_tokens <- function(textobj,
 # tool functions #
 ##################
 
-count_words <- function(textobj, lang,
-						remove_punct = TRUE,
-						tolower = TRUE, 
-						remove_stopwords = FALSE,
-						unique_words = FALSE) {
-	#'
-	#' TODO
-	#' 
-
-	tokenized_text <- get_tokens(textobj, lang, 
-								tolower = tolower,
-								remove_punct = remove_punct, 
-								remove_stopwords = remove_stopwords)
-	if(isTRUE(unique_words)) {
-		return(ntype(tokenized_text))
-	} else {
-		return(ntoken(tokenized_text))
-	}
-	
-}
 
 frequency_distribution <- function(textobj, lang, 
 								   remove_punct = TRUE,
@@ -238,6 +274,8 @@ frequency_distribution <- function(textobj, lang,
 
 	df$feature <- with(df, reorder(feature, -frequency))
 
+
+	# EXPAND: different size, base_size values for different corpora
 	if(top_n_features <= 25) {
 		size = 5
 		base_size = 24
@@ -262,87 +300,165 @@ frequency_distribution <- function(textobj, lang,
 	return(g)
 }
 
-#todo
+
 kwic_df <- function(textobj,
 					lang,
 					pattern,
-					remove_punct = TRUE,
-					tolower = TRUE) {
+					window = 5,
+					docname = "",
+					tolower = TRUE,
+					remove_punct = TRUE) {
+	#' Creates a quanteda KWIC dataframe.
+	#' 
+	#' Takes a text object and a pattern/keyword to create a KWIC DataFrame from them.
 	#'
-	#' TODO: remove stopwords und so wieder einfügen?
-	#'
-	toks <- get_tokens(textobj, lang, remove_punct = remove_punct, tolower = tolower)
+	#' @param textobj text as string.
+	#' @param lang language identificator as string.
+	#' @param pattern string which indicates the keyword to be analysed in KWIC df.
+	#' @param window numeric which indicates the number of words before and after the pattern.
+	#' @param docname string which, if not empty, sets the name of the document.
+	#' @param tolower boolean value if words should be converted to lowercase.
+	#' @param remove_punct boolean value if punctation should be removed.
+	toks <- get_tokens(textobj, lang, 
+						tolower = tolower,
+						remove_punct = remove_punct, 
+						remove_stopwords = FALSE) 
+
+
+	if(docname != "") {
+		docnames(toks) <- docname
+	}
 	
-	df <- kwic(toks, pattern = pattern)
-	df <- subset(df, select = -c(pattern))
+	df <- kwic(toks, pattern = pattern, window = window)
+	df <- subset(df, select = -c(pattern, to))
+	names(df)[names(df) == 'from'] <- 'from/to'
 	return(df)
 }
 
 
-#todo
+
+lexical_diversity_distribution <- function(l, lexical_diversity_measure) {
+	#' Creates a line plot with lexical diversity measures from a list of playnames.
+	#'
+	#' Takes a list of playnames and a lexical diversity measure and returns a line plot
+	#' with the play names on the x-axis and the measures on the y-axis. 
+	#' 
+	#' @param l list with names of all plays of an author
+	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
+	#'		  All available options can be found here: 
+	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
+
+	n <- length(l)
+	name_col <- stringr::str_trunc(names(unlist(l)), 20)
+	value_col <- as.numeric(paste(unlist(l)))
+	df <- data.frame("name" =  name_col, "value" = value_col)
+
+
+	# EXPAND: different base_size values for different corpora
+	if(n < 5) {
+		base_size = 20
+	} else if((n >= 5) & (n < 10)) {
+		base_size = 17
+	} else if(n >= 10) {
+		base_size = 14
+	}
+
+	g <- ggplot(data = df, 
+				aes(x = name, y = value, group = 1)) + 
+				geom_line(size=1) + 
+				labs(y = lexical_diversity_measure, x = "Play names") + 
+				theme_bw(base_size=base_size) + 
+				theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+	return(g)
+}
+
+
+
 statistics_df <- function(textobj, lang, 
 							all_plays = FALSE,
 							remove_punct = TRUE,
 							tolower = TRUE, 
 							remove_stopwords = FALSE,
-							unique_words = FALSE) {
+							lexical_diversity_measure = "TTR",
+							readability_measure = "Flesch") {
+	#' Creates a dataframe with several statistics from a text object
 	#'
-	#' TODO
+	#' Takes a text object and returns a dataframe with the following statistical
+	#' properties from the text object: token counts, type count, stopword proportion,
+	#' sentence count, numbers count, lexical diversity and text readability.
 	#'
+	#' @param textobj text as string.
+	#' @param lang language identificator as string.
+	#' @param remove_punct boolean value if punctation should be removed.
+	#' @param tolower boolean value if words should be converted to lowercase.
+	#' @param remove_stopwords boolean value if stopwords should be removed.
+	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
+	#'		  All available options can be found here: 
+	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
+	#' @param readability_measure string which indicates the text readability measure.
+	#'		  All available options can be found here: 
+	#'		  https://www.rdocumentation.org/packages/quanteda/versions/2.1.2/topics/textstat_readability
 
-
-	# TODO: INCLUDE
-	# - Vocabularity Density
-	# - Average Words Per Sentence
-
-	toks <- get_tokens(textobj, lang,
-						tolower = tolower,
-						remove_punct = remove_punct,
-						remove_stopwords = remove_stopwords)
+	
 
 	if (isTRUE(all_plays)) {
 		string_play_name <- "all plays"
 	} else {
 		string_play_name <- "the play"
 	}
+	
+
+
+	# stats summary
+	toks_no_sw <- get_tokens(textobj, lang,
+						tolower = tolower,
+						remove_punct = remove_punct,
+						remove_stopwords = TRUE)
+	stats_summary_no_sw <- textstat_summary(toks_no_sw)
+
+	toks_sw <- get_tokens(textobj, lang,
+						tolower = tolower,
+						remove_punct = remove_punct,
+						remove_stopwords = FALSE)
+	stats_summary_sw <- textstat_summary(toks_sw)
+
+	if(isTRUE(remove_stopwords)) {
+		toks <- toks_no_sw
+		stats_summary <- stats_summary_no_sw
+	} else {
+		toks <- toks_sw
+		stats_summary <- stats_summary_sw
+	}
+
+	
 
 	## word counts ##
-	word_count <- count_words(textobj,
-								lang,
-								remove_punct = remove_punct,
-								tolower = tolower, 
-								remove_stopwords = remove_stopwords,
-								unique_words = FALSE)
-	unique_word_count <- count_words(textobj,
-								lang,
-								remove_punct = remove_punct,
-								tolower = tolower, 
-								remove_stopwords = remove_stopwords,
-								unique_words = TRUE)
+	tokens_count <- stats_summary[["tokens"]]
+	types_count <- stats_summary[["types"]]
 
 
 	## proportion stop words ##
-	word_count_with_stopwords <- count_words(textobj, lang, 
-												tolower=TRUE,
-												remove_stopwords=FALSE,
-												unique_words=TRUE)
-	word_count_no_stopwords	<- count_words(textobj, lang, 
-											tolower=TRUE,
-											remove_stopwords=TRUE,
-											unique_words=TRUE)
-	count_stopwords <- word_count_with_stopwords - word_count_no_stopwords
-	proportion_stopwords <- paste0("~",round(count_stopwords / word_count_with_stopwords, digits=2),"%")
+	count_stopwords <- stats_summary_sw[["types"]] - stats_summary_no_sw[["types"]]
+	proportion_stopwords <- paste0("~",(round(count_stopwords / stats_summary_sw[["types"]], digits=3)*100),"%")
+
+	## count sentences ##
+	count_sentences <- nsentence(textobj)
+
+	## count numbers ##
+	count_numbers <- stats_summary[["numbers"]]
+
 
 
 	## lexical diversity ##
+	lexical_diversity <- round(textstat_lexdiv(toks, 
+								measure = get_lexical_diversity_name(lexical_diversity_measure))[[2]], 
+								digits=3)
 
-		
 
-	# TODO: hier weiter, das in tabelle implementieren
-	# TODO: auch das angucken: https://towardsdatascience.com/linguistic-complexity-measures-for-text-nlp-e4bf664bd660
-
-	lexical_diversity <- textstat_lexdiv(toks, measure = "TTR")
-	print(lexical_diversity)
+	## readability ##
+	readability <- round(textstat_readability(textobj, measure = readability_measure)[[2]], digits=3)
+	
 
 
 	if (isTRUE(remove_punct) & isTRUE(remove_stopwords)) {
@@ -356,15 +472,21 @@ statistics_df <- function(textobj, lang,
 	}
 
 
-	word_count_name <- paste0("<b>", "Overall word count of ", string_play_name, " (= <u>token</u> count)", 
+	tokens_count_name <- paste0("<b>", "Overall word count of ", string_play_name, " (= <u>token</u> count)", 
 								"</b>", string_length_play)
-	unique_word_count_name <- paste0("<b>", "Unique word count of ", string_play_name, " (= <u>type</u> count)", 
+	types_count_name <- paste0("<b>", "Unique word count of ", string_play_name, " (= <u>type</u> count)", 
 										"</b>", string_length_play)
 	proportion_stopwords_name <- paste0("<b>", "Proportion of stop words in ", string_play_name, "</b>")
+	count_sentences_name <- paste0("<b>", "Count of sentences in ", string_play_name, "</b>")
+	count_numbers_name <- paste0("<b>", "Count of numbers in ", string_play_name, "</b>")
+	lexical_diversity_name <- paste0("<b>", "Lexical diversity in ", string_play_name, "</b>")
+	readability_name <- paste0("<b>", "Text readability of ", string_play_name, "</b>")
 
-	#todo erweiteren!!
-	index_col <- c(word_count_name, unique_word_count_name, proportion_stopwords_name)
-	result_col <- c(word_count, unique_word_count, proportion_stopwords)
+	
+	index_col <- c(tokens_count_name, types_count_name, proportion_stopwords_name, 
+		count_sentences_name, count_numbers_name, lexical_diversity_name, readability_name)
+	result_col <- c(tokens_count, types_count, proportion_stopwords, count_sentences, 
+					 count_numbers, lexical_diversity, readability)
 
 	df <- data.frame("name" = index_col, "result" = result_col)
 	rownames(df) <- df$name
