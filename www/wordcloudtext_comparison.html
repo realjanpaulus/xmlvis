@@ -1,0 +1,57 @@
+<html>
+<head>
+	<style>
+		.continuoustext {
+				font-size: 16px;
+			}
+
+		.empty {
+		    margin-bottom: 20px;
+		}
+
+		.line {
+			padding-top: 10px;
+			border-top: 1px solid rgb(217, 217, 217);
+		}
+
+		b.grey {
+			background-color:#e6e6e6;
+		}
+
+		b.lightgrey {
+			background-color:#f5f5f5;
+		}
+
+
+		p {
+			margin-top: 10px;
+		}
+	</style>
+</head>
+<body>
+	<div>
+		<h3>How to use the wordcloud comparison</h3>
+			<div class="continuoustext">
+				<p>
+					The <b class="grey">comparison wordcloud</b> is a composite wordcloud of selected plays by the author which can be then compared and contrasted. The maximum frequency will be split evenly across the plays. The selection <i>Use all plays</i> is deactivated, the plays can be selected below. In addition to to the already existing options, another wordcloud option panel appears on the left side: the <b class="grey">Wordcloud comparsion options</b>.
+				</p>
+				<p>
+					The new panel options are:
+					<ul>
+						<li><b class="lightgrey">Select the plays to be compared</b>: Select the plays of the author which should be compared. By default, the first two plays are selected. If only one or no play is selected, no wordcloud is plotted. No wordcloud is plotted either if the author has only one play in the corpus. Only a maximum of 8 plays can be selected, even if the <i>Select all</i> button is pressed and the author has more than 8 plays in the corpus. Then the <u>first</u> 8 plays of the play selection list are plotted.</li>
+						<li><b class="lightgrey">Size of the play names</b>: This specifies the size of the play names within the comparison wordcloud.</li>
+						<li><b class="lightgrey">Padding of the play names</b>: This specifies the spacing between the play names and the actual wordcloud.</li>
+					</ul>
+				</p>
+			</div>
+		</div>
+		<p>
+			<div class="continuoustext">	
+				<u>Note</u>: For authors with multiple plays, it may take a short time to calculate the wordclouds.
+			</div>
+		</p>		
+	</div>
+	<div class="line"/>
+	<div class="empty"/>
+</body>
+</html>

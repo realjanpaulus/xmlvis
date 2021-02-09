@@ -253,7 +253,7 @@ frequency_distribution <- function(textobj, lang,
 						  		   tolower = TRUE, 
 						  		   remove_stopwords = FALSE,
 						  		   top_n_features = 100,
-						  		   color_point ="#8DA0CB") {
+						  		   color_point = "#8DA0CB") {
 	#' Creates a frequency distribution from a text.
 	#'
 	#' Takes a plain text or quanteda corpus object, computes a word frequency
@@ -325,7 +325,7 @@ kwic_df <- function(textobj,
 						remove_stopwords = FALSE) 
 
 
-	if(docname != "") {
+	if(isTRUE(docname != "")) {
 		docnames(toks) <- docname
 	}
 	
@@ -335,43 +335,6 @@ kwic_df <- function(textobj,
 	return(df)
 }
 
-
-
-lexical_diversity_distribution <- function(l, lexical_diversity_measure) {
-	#' Creates a line plot with lexical diversity measures from a list of playnames.
-	#'
-	#' Takes a list of playnames and a lexical diversity measure and returns a line plot
-	#' with the play names on the x-axis and the measures on the y-axis. 
-	#' 
-	#' @param l list with names of all plays of an author
-	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
-	#'		  All available options can be found here: 
-	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
-
-	n <- length(l)
-	name_col <- stringr::str_trunc(names(unlist(l)), 20)
-	value_col <- as.numeric(paste(unlist(l)))
-	df <- data.frame("name" =  name_col, "value" = value_col)
-
-
-	# EXPAND: different base_size values for different corpora
-	if(n < 5) {
-		base_size = 20
-	} else if((n >= 5) & (n < 10)) {
-		base_size = 17
-	} else if(n >= 10) {
-		base_size = 14
-	}
-
-	g <- ggplot(data = df, 
-				aes(x = name, y = value, group = 1)) + 
-				geom_line(size=1) + 
-				labs(y = lexical_diversity_measure, x = "Play names") + 
-				theme_bw(base_size=base_size) + 
-				theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-	return(g)
-}
 
 
 
@@ -495,6 +458,81 @@ statistics_df <- function(textobj, lang,
 	return(df)
 }
 
+
+statistics_distribution <- function(l, 
+								author_name, 
+								measure,
+								text_stat_name = "Lexical diversity",
+								plot_method = "Line Plot",
+								plot_title_linebreak = FALSE,
+								plot_title_size = 22) {
+	#' Creates a line plot with a specified measure (lexical diversity, text readability) 
+	#' from a list of playnames.
+	#'
+	#' Takes a list of playnames and a specified measure (lexical diversity, text readability)
+	#' and returns a line plot with the play names on the x-axis and the measures on the y-axis. 
+	#' 
+	#' @param l list with names of all plays of an author
+	#' @param author_name string with the name of the author.
+	#' @param measure string which indicates a the measures name.
+	#'		  All available options can be found here: 
+	#'		  - https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
+	#'		  - https://www.rdocumentation.org/packages/quanteda/versions/2.1.2/topics/textstat_readability
+	#' @param text_stat_name string which indicates the text statistics name which should be plotted. 
+	#' @param plot_method string which indicates plot method ("Line Plot" or "Bar chart").
+	#' @param plot_title_linebreak boolean if plot title should contain linebreak.
+	#' @param plot_title_size numeric which indicates size of plot title.
+
+	n <- length(l)
+	name_col <- stringr::str_trunc(names(unlist(l)), 20)
+	value_col <- as.numeric(paste(unlist(l)))
+	df <- data.frame("name" =  name_col, "value" = value_col)
+
+
+	# EXPAND: different base_size values for different corpora
+	if(n < 5) {
+		base_size <- 20
+	} else if((n >= 5) & (n < 10)) {
+		base_size <- 17
+	} else if(n >= 10) {
+		base_size <- 14
+	}
+	if (isTRUE(plot_title_linebreak)) {
+		lb <- "\n"
+	} else {
+		lb <- ""
+	}
+
+	# EXPAND: include option (e.g. checkbox) with which a fixed coordinate system can be selected
+	
+		
+	if (isTRUE(plot_method == "Bar chart")) {
+		g <- ggplot(data = df, 
+				aes(x = name, y = value, group = 1)) + 
+				geom_bar(stat='identity', color="#8DA0CB", fill="#8DA0CB") + 
+				# EXPAND: reduce/expand spacing bewtween x-axis and line plot/bar chart?
+				scale_y_continuous(expand = expansion(mult = c(0.01, .1))) + 
+				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"), 
+						y = measure, x = "Play names") + 
+				theme_bw(base_size=base_size) + 
+				theme(axis.text.x = element_text(angle = 90, hjust = 1),
+						plot.title = element_text(size=plot_title_size,
+													margin=margin(0,0,10,0)))
+	} else {
+		g <- ggplot(data = df, 
+				aes(x = name, y = value, group = 1)) + 
+				geom_line(size=1) + 
+				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"), 
+						y = measure, x = "Play names") + 
+				theme_bw(base_size=base_size) + 
+				theme(axis.text.x = element_text(angle = 90, hjust = 1),
+						plot.title = element_text(size=plot_title_size,
+													margin=margin(0,0,10,0)))
+	}
+	
+	
+	return(g)
+}
 
 
 wordcloudplot <- function(textobj, lang, 
