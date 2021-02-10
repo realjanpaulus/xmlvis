@@ -25,6 +25,7 @@ wordcloudhtml <- "www/wordcloudtext_simple.html"
 wordfreqhtml <- "www/wordfreqtext.html"
 
 
+urlreadercorpus <- "https://dracor.org/ger"
 urlcorpus <- "https://dracor.org/api/corpora/ger"
 urlcorpora <- "https://dracor.org/api/corpora"
 urlcorporashort <- "https://dracor.org/api/corpora/"
@@ -49,7 +50,8 @@ ui <- fluidPage(theme = shinytheme("united"),
 			verticalLayout(
 				uiOutput("select_corpora"),
 				uiOutput("select_authors"),
-				conditionalPanel(condition = "input.tabselected == 'reader' ||
+				conditionalPanel(condition = "(input.tabselected == 'reader' &&
+												input.reader_radio_text_representation == 'Raw text') ||
 												input.tabselected == 'freq' ||
 												input.tabselected == 'kwic' ||
 												input.tabselected == 'about' ||
@@ -58,12 +60,15 @@ ui <- fluidPage(theme = shinytheme("united"),
 													input.statstabselected == 'stats_tab_table') ||
 												(input.tabselected == 'cloud' && 
 													input.wordcloudtabselected == 'wordcloud_tab_simple')",
-					# only renders play selection if the "Use all plays" checkbox 
-					# is not activated
-					conditionalPanel(condition = "input.checkbox_allplays == false",
+
+					# multiple play selection or single play
+					conditionalPanel(condition = "input.checkbox_multiple_plays == true",
+						uiOutput("select_multiple_plays")
+					),
+					conditionalPanel(condition = "input.checkbox_multiple_plays == false",
 						uiOutput("select_plays")
 					),
-					uiOutput("checkbox_allplays")
+					uiOutput("checkbox_multiple_plays")
 				),
 				conditionalPanel(condition = "(input.tabselected == 'stats' && 
 													input.statstabselected == 'stats_tab_playlength') || 
@@ -73,8 +78,20 @@ ui <- fluidPage(theme = shinytheme("united"),
 													input.statstabselected == 'stats_tab_tr') ||
 												(input.tabselected == 'cloud' &&
 			 										input.wordcloudtabselected == 'wordcloud_tab_comparison')",
-					uiOutput("substitute_text_allplays")
-				),
+			 		conditionalPanel(condition = "(input.tabselected == 'stats' && 
+													input.statstabselected == 'stats_tab_playlength') || 
+												(input.tabselected == 'stats' && 
+													input.statstabselected == 'stats_tab_ld') ||
+												(input.tabselected == 'stats' && 
+													input.statstabselected == 'stats_tab_tr')",
+			 			uiOutput("select_multiple_plays_special")
+			 		),
+			 		conditionalPanel(condition = "input.tabselected == 'cloud' &&
+			 										input.wordcloudtabselected == 'wordcloud_tab_comparison'",
+						uiOutput("select_wordcloud_comparison_plays")
+					),
+					uiOutput("substitute_text_multiple_plays")
+				),				
 				conditionalPanel(condition = "input.tabselected != 'reader'",
 					uiOutput("textpreprocessing_title"),	
 					uiOutput("checkbox_stopwords"),
@@ -101,6 +118,10 @@ ui <- fluidPage(theme = shinytheme("united"),
 								uiOutput("stats_plot_title_size_slider")
 					)
 				),
+				# reader panel
+				conditionalPanel(condition = "input.tabselected == 'reader'",
+					uiOutput("reader_radio_text_representation")
+				),
 				# wordfrequency distribution panel
 				conditionalPanel(condition = "input.tabselected == 'freq' 
 												&& input.wordfreqtabselected == 'Distribution'",
@@ -111,7 +132,6 @@ ui <- fluidPage(theme = shinytheme("united"),
 				conditionalPanel(condition = "input.tabselected == 'cloud'",
 					conditionalPanel(condition = "input.wordcloudtabselected == 'wordcloud_tab_comparison'",
 						uiOutput("wordcloud_comparison_panel_title"),
-						uiOutput("wordcloud_comparison_plays"),
 						uiOutput("wordcloud_label_size"),
 						uiOutput("wordcloud_label_padding"),
 						br()
@@ -186,25 +206,25 @@ ui <- fluidPage(theme = shinytheme("united"),
 						 uiOutput("reader_text"),
 						 value = "reader"),
 				tabPanel(title = "Word frequencies", 
-						fluidRow(
-							column(width=6, 
-								   style="padding-top: 0px;",
-								   titlePanel(uiOutput("wordfreqtitle")),
-								   br(),
-								   tabsetPanel(id="wordfreqtabselected",
-								   		tabPanel(title = "Table",
-								   				br(),
-								   				DT::dataTableOutput(outputId = "wordfreq_table")
-								   				),
-								   		tabPanel(title = "Distribution",
-								   				 br(),
-								   				 plotOutput(outputId = "wordfreq_distribution")
-								   				 )
-								   )
-						    ),
-							column(width=6, 
-								   style="padding-top: 5px; padding-right: 22px;",
-								   uiOutput("wordfreq_text")) 
+							fluidRow(
+								column(width=6, 
+									   style="padding-top: 0px;",
+									   titlePanel(uiOutput("wordfreqtitle")),
+									   br(),
+									   tabsetPanel(id="wordfreqtabselected",
+									   		tabPanel(title = "Table",
+									   				br(),
+									   				DT::dataTableOutput(outputId = "wordfreq_table")
+									   				),
+									   		tabPanel(title = "Distribution",
+									   				 br(),
+									   				 plotOutput(outputId = "wordfreq_distribution")
+									   				 )
+									   )
+							    ),
+								column(width=6, 
+									   style="padding-top: 5px; padding-right: 22px;",
+									   uiOutput("wordfreq_text")) 
 						 ),
 						 value="freq"),
 				tabPanel(title = "Wordcloud", 
@@ -263,6 +283,7 @@ ui <- fluidPage(theme = shinytheme("united"),
 
 server <- function(input, output) {
 
+
 	#####################
 	### Sidebar panel ###
 	#####################
@@ -270,14 +291,14 @@ server <- function(input, output) {
 	# reactive corpus list with all informations of a corpus,
 	# taken from json file, which was identified by its input `lang`
 	corp <- reactive({
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 		if(is.null(lang)) return(NULL)
 		extractdramas(paste0(urlcorporashort, lang))
 	})
 
 	# render corpus selection
 	output$select_corpora <- renderUI({
-		selectInput("selectedcorpus",
+		selectInput("select_corpora",
 					label = "Choose a corpus:",
 					choices = selectcorpora(urlcorpus))
 					# EXPAND: change to `urlcorpora` for all corpora
@@ -286,7 +307,7 @@ server <- function(input, output) {
 	# render author selection
 	output$select_authors <- renderUI({
 		if (is.null(corp() )) return(NULL)
-		selectInput("selectedauthor",
+		selectInput("select_authors",
 					label = "Choose an author:",
 					choices = selectauthors(corp() ))
 	})
@@ -294,21 +315,59 @@ server <- function(input, output) {
 	# render play selection
 	output$select_plays <- renderUI({
 		if (is.null(corp() )) return(NULL)
-		selectInput("selectedplay", 
+		selectInput("select_plays", 
 					label = "Choose his/her play:",
-					choices = selectplays(corp(), input$selectedauthor))
+					choices = selectplays(corp(), input$select_authors))
 	})
 
+	# todo: noch mehr einstellungen?
+	# render various play selection
+	output$select_multiple_plays <- renderUI({
+		if (is.null(corp() )) return(NULL)
+		pickerInput("select_multiple_plays", 
+					label = "Choose his/her plays:",
+					choices = c(selectplays(corp(), input$select_authors)),
+					selected = c(selectplays(corp(), input$select_authors))[1],
+					multiple = TRUE,
+					options = pickerOptions(
+					        actionsBox = TRUE,
+					        maxOptions = 100,
+					        selectedTextFormat = "count > 3",
+					        size = 10
+					    )
+					)
+	})
+
+	# todo: noch mehr einstellungen?
+	# render various play selection (special)
+	output$select_multiple_plays_special <- renderUI({
+		if (is.null(corp() )) return(NULL)
+		pickerInput("select_multiple_plays_special", 
+					label = "Choose his/her plays:",
+					choices = c(selectplays(corp(), input$select_authors)),
+					selected = c(selectplays(corp(), input$select_authors))[1:2],
+					multiple = TRUE,
+					options = pickerOptions(
+					        actionsBox = TRUE,
+					        maxOptions = 100,
+					        selectedTextFormat = "count > 3",
+					        size = 10
+					    )
+					)
+	})
+
+
 	# render all plays checkbox
-	output$checkbox_allplays <- renderUI({
-		checkboxInput("checkbox_allplays", 
-					  label = "Use all plays",
+	output$checkbox_multiple_plays <- renderUI({
+		checkboxInput("checkbox_multiple_plays", 
+					  label = "Select multiple plays",
 					  value = FALSE)
 	})
 
-	# render all plays substitute text
-	output$substitute_text_allplays <- renderText({
-		"<h5><i><u>Note</u>: Using all plays by default</i></h5>"
+
+	# render all plays substitute text	
+	output$substitute_text_multiple_plays <- renderText({
+		"<h5><i><u>Note</u>: Using multiple play selection by default</i></h5>"
 	})
 
 	##################################
@@ -348,16 +407,16 @@ server <- function(input, output) {
 	
 	# render dynamic tab title
 	output$stats_title <- renderText({
-		if (!isTRUE(input$checkbox_allplays)) {
+		if (!isTRUE(input$checkbox_multiple_plays)) {
 			if (isTRUE(input$statstabselected == 'stats_tab_playlength') | 
 				isTRUE(input$statstabselected == 'stats_tab_ld') | 
 				isTRUE(input$statstabselected == 'stats_tab_tr')) {
-				"Statistics of all plays of the selected author"
+				"Statistics of selected plays"
 			} else {
 				"Statistics of a play"
 			}								
 		} else {
-			"Statistics of all plays of the selected author"
+			"Statistics of selected plays"
 		} 
 	})
 
@@ -441,7 +500,7 @@ server <- function(input, output) {
 	output$stats_checkbox_plot_title_linebreak <- renderUI({
 		checkboxInput("stats_checkbox_plot_title_linebreak",
 					  label = "Use a linebreak in the title of the plot",
-					  value = FALSE)
+					  value = TRUE)
 	})
 
 	# render slider for plot title size
@@ -457,43 +516,26 @@ server <- function(input, output) {
 
 	# render statistics table
 	output$stats_table <- DT::renderDataTable({
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 
 		## only one play ##
-		if(!isTRUE(input$checkbox_allplays)) {
-			textobj <- get_text(corpusobj = input$selectedcorpus,
+		if(!isTRUE(input$checkbox_multiple_plays)) {
+
+			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
-									play_name = input$selectedplay)
+									play_name = input$select_plays)
 
-		## all plays of an author ##
+		## selected plays of an author ##
 		} else {
-			playnames <- selectplays(corp(), input$selectedauthor)
-
-			n <- length(playnames)
-			allplays <- vector("list", n)
-
-			withProgress(message = 'Loading plays', value = 0, {
-				i <- 1
-				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
-											url = urlcorpora,
-											play_name = play)
-					allplays[[i]] <- playtext
-
-					# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-				}
-			})
-
-			textobj <- paste(allplays, sep = "", collapse = "")
-
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_multiple_plays)
 		}
 
 		df <- statistics_df(textobj,
 							lang,
-							all_plays = isTRUE(input$checkbox_allplays),
+							multiple_plays = isTRUE(input$checkbox_multiple_plays),
 							remove_punct = input$checkbox_punctation,
 							tolower = input$checkbox_lowercase, 
 							remove_stopwords = input$checkbox_stopwords,
@@ -510,174 +552,42 @@ server <- function(input, output) {
 
 	# render play length plot
 	output$stats_plot_playlength <- renderPlot({
-		lang <- input$selectedcorpus
 
-		playnames <- selectplays(corp(), input$selectedauthor)
+		playnames <- get_playnames(selectplays(corp(), input$select_authors),
+										input$select_multiple_plays_special)
 		n <- length(playnames)
-		allplays <- list()
 
-		withProgress(message = 'Loading plays', value = 0, {
-			i <- 1
-			for(play in playnames) {
-				playtext <- get_text(corpusobj = input$selectedcorpus,
-										url = urlcorpora,
-										play_name = play)
-				playname <- names(playnames)[[i]]
+		# authors with only one play or only one selected play won't plot anything
+		if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
+			isTRUE(n > 1)) {
 
-				
-				if(isTRUE(input$stats_plot_tokentype_radio == "Tokens")) {
-					allplays[[playname]] <- statistics_df(playtext, lang, 
-										all_plays = TRUE,
-										remove_punct = input$checkbox_punctation,
-										tolower = input$checkbox_lowercase, 
-										remove_stopwords = input$checkbox_lowercase)[[1]][1]
-				} else if(isTRUE(input$stats_plot_tokentype_radio == "Types")) {
-					allplays[[playname]] <- statistics_df(playtext, lang, 
-										all_plays = TRUE,
-										remove_punct = input$checkbox_punctation,
-										tolower = input$checkbox_lowercase, 
-										remove_stopwords = input$checkbox_lowercase)[[1]][2]
-				}		
-				
-				
-				# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
+			lang <- input$select_corpora
 
-			}
-		})
-
-		if(isTRUE(input$stats_plot_tokentype_radio == "Tokens")) {
-			text_stat_name <- "Play length (by tokens)"
-		} else if(isTRUE(input$stats_plot_tokentype_radio == "Types")) {
-			text_stat_name <- "Play length (by types)"
-		}
-
-		statistics_distribution(allplays, 
-							input$selectedauthor, 
-							measure = text_stat_name,
-							text_stat_name = text_stat_name,
-							plot_method = input$stats_plot_vis_type_radio,
-							plot_title_size = input$stats_plot_title_size_slider,
-							plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
-	})
-
-	# render lexical diversity plot
-	output$stats_plot_ld <- renderPlot({
-
-		lang <- input$selectedcorpus
-		ld_measure <- get_lexical_diversity_name(input$stats_select_lexical_diversity)
-
-		playnames <- selectplays(corp(), input$selectedauthor)
-		n <- length(playnames)
-		allplays <- list()
-
-		withProgress(message = 'Loading plays', value = 0, {
-			i <- 1
-			for(play in playnames) {
-				playtext <- get_text(corpusobj = input$selectedcorpus,
-										url = urlcorpora,
-										play_name = play)
-				playtokens <- get_tokens(playtext, lang,
-										remove_punct = input$checkbox_punctation,
-										tolower = input$checkbox_lowercase, 
-										remove_stopwords = input$checkbox_stopwords)
-				playname <- names(playnames)[[i]]
-				allplays[[playname]] <- textstat_lexdiv(playtokens, measure = ld_measure)[[2]]
-				
-				# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-			}
-		})
-
-		statistics_distribution(allplays, 
-							input$selectedauthor, 
-							ld_measure,
-							text_stat_name = "Lexical diversity",
-							plot_method = input$stats_plot_vis_type_radio,
-							plot_title_size = input$stats_plot_title_size_slider,
-							plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
-	})
-
-	# render text readability plot
-	output$stats_plot_tr <- renderPlot({
-		lang <- input$selectedcorpus
-		tr_measure <- input$stats_select_text_readability
-
-		playnames <- selectplays(corp(), input$selectedauthor)
-		n <- length(playnames)
-		allplays <- list()
-
-		withProgress(message = 'Loading plays', value = 0, {
-			i <- 1
-			for(play in playnames) {
-				playtext <- get_text(corpusobj = input$selectedcorpus,
-										url = urlcorpora,
-										play_name = play)
-				playname <- names(playnames)[[i]]
-				allplays[[playname]] <- textstat_readability(playtext, measure = tr_measure)[[2]]
-				
-				# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-			}
-		})
-
-
-		statistics_distribution(allplays, 
-							input$selectedauthor, 
-							tr_measure,
-							text_stat_name = "Text readability",
-							plot_method = input$stats_plot_vis_type_radio,
-							plot_title_size = input$stats_plot_title_size_slider,
-							plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
-	})
-
-
-
-	###############################
-	### Render tab: Play Reader ###
-	###############################
-
-	# render dynamic tab title
-	output$reader_title <- renderText({
-		if (!isTRUE(input$checkbox_allplays)) {
-			"Simple play reader"
-		} else {
-			"Simple plays reader"
-		} 
-		
-	})
-
-	# render reader text
-	output$reader_text <- renderUI({
-		lang <- input$selectedcorpus
-
-		## only one play ##
-		if (!isTRUE(input$checkbox_allplays)) {
-			textobj <- get_text(corpusobj = input$selectedcorpus,
-									url = urlcorpora,
-									play_name = input$selectedplay)
-		## all plays of an author ##
-		} else {
-
-			playnames <- selectplays(corp(), input$selectedauthor)
-			n <- length(playnames)
-			allplays <- vector("list", n)
+			textobj <- list()
 
 			withProgress(message = 'Loading plays', value = 0, {
 				i <- 1
 				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
+					playtext <- get_text(corpusobj = input$select_corpora,
 											url = urlcorpora,
 											play_name = play)
+					playname <- names(playnames)[[i]]
 
-					playtitle <- names(playnames)[[i]]
-					allplays[[i]] <- paste0("<br><h2>", playtitle, "</h2><br>", playtext)
-
+					
+					if(isTRUE(input$stats_plot_tokentype_radio == "Tokens")) {
+						textobj[[playname]] <- statistics_df(playtext, lang, 
+															multiple_plays = TRUE,
+															remove_punct = input$checkbox_punctation,
+															tolower = input$checkbox_lowercase, 
+															remove_stopwords = input$checkbox_lowercase)[[1]][1]
+					} else if(isTRUE(input$stats_plot_tokentype_radio == "Types")) {
+						textobj[[playname]] <- statistics_df(playtext, lang, 
+															multiple_plays = TRUE,
+															remove_punct = input$checkbox_punctation,
+															tolower = input$checkbox_lowercase, 
+															remove_stopwords = input$checkbox_lowercase)[[1]][2]
+					}		
+					
 					# Increment the progress bar, and update the detail text.
 					incProgress(1/n, detail = paste("Play", i, "of", n))
 					i <- i + 1
@@ -685,10 +595,172 @@ server <- function(input, output) {
 				}
 			})
 
-			textobj <- paste(allplays, sep = "", collapse = "")
-		} 
+			if(isTRUE(input$stats_plot_tokentype_radio == "Tokens")) {
+				text_stat_name <- "Play length (by tokens)"
+			} else if(isTRUE(input$stats_plot_tokentype_radio == "Types")) {
+				text_stat_name <- "Play length (by types)"
+			}
 
-		HTML(gsub("\n", "<br>", textobj))
+			statistics_distribution(textobj, 
+									input$select_authors, 
+									measure = text_stat_name,
+									text_stat_name = text_stat_name,
+									plot_method = input$stats_plot_vis_type_radio,
+									plot_title_size = input$stats_plot_title_size_slider,
+									plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
+
+
+		}	
+	})
+
+	# render lexical diversity plot
+	output$stats_plot_ld <- renderPlot({
+
+		playnames <- get_playnames(selectplays(corp(), input$select_authors),
+										input$select_multiple_plays_special)
+		n <- length(playnames)
+
+		# authors with only one play or only one selected play won't plot anything
+		if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
+			isTRUE(n > 1)) {
+
+			lang <- input$select_corpora
+			ld_measure <- get_lexical_diversity_name(input$stats_select_lexical_diversity)
+
+			
+			textobj <- list()
+
+			withProgress(message = 'Loading plays', value = 0, {
+				i <- 1
+				for(play in playnames) {
+					playtext <- get_text(corpusobj = input$select_corpora,
+											url = urlcorpora,
+											play_name = play)
+					playtokens <- get_tokens(playtext, lang,
+											remove_punct = input$checkbox_punctation,
+											tolower = input$checkbox_lowercase, 
+											remove_stopwords = input$checkbox_stopwords)
+					playname <- names(playnames)[[i]]
+					textobj[[playname]] <- textstat_lexdiv(playtokens, measure = ld_measure)[[2]]
+					
+					# Increment the progress bar, and update the detail text.
+						incProgress(1/n, detail = paste("Play", i, "of", n))
+						i <- i + 1
+
+				}
+			})
+
+			statistics_distribution(textobj, 
+									input$select_authors, 
+									ld_measure,
+									text_stat_name = "Lexical diversity",
+									plot_method = input$stats_plot_vis_type_radio,
+									plot_title_size = input$stats_plot_title_size_slider,
+									plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
+		}
+	})
+
+	# render text readability plot
+	output$stats_plot_tr <- renderPlot({
+
+		playnames <- get_playnames(selectplays(corp(), input$select_authors),
+										input$select_multiple_plays_special)
+		n <- length(playnames)
+
+		# authors with only one play or only one selected play won't plot anything
+		if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
+			isTRUE(n > 1)) {
+
+			lang <- input$select_corpora
+			tr_measure <- input$stats_select_text_readability
+
+			textobj <- list()
+
+			withProgress(message = 'Loading plays', value = 0, {
+				i <- 1
+				for(play in playnames) {
+					playtext <- get_text(corpusobj = input$select_corpora,
+											url = urlcorpora,
+											play_name = play)
+					playname <- names(playnames)[[i]]
+					textobj[[playname]] <- textstat_readability(playtext, measure = tr_measure)[[2]]
+					
+					# Increment the progress bar, and update the detail text.
+						incProgress(1/n, detail = paste("Play", i, "of", n))
+						i <- i + 1
+
+				}
+			})
+
+
+			statistics_distribution(textobj, 
+									input$select_authors, 
+									tr_measure,
+									text_stat_name = "Text readability",
+									plot_method = input$stats_plot_vis_type_radio,
+									plot_title_size = input$stats_plot_title_size_slider,
+									plot_title_linebreak = input$stats_checkbox_plot_title_linebreak)
+		}
+	})
+
+
+
+	###############################################
+	### Render tab: Play Reader 				###
+	###############################################
+	### EXPAND: the reader is a prototype. 		###
+	###		  	It could be expanded with e.g.:	###
+	###		  	- CETEI							###
+	###		  	- TEI Boilerplate + XSLT		###
+	###		  	- own javascript files			###
+	###############################################
+
+
+
+	# render dynamic tab title
+	output$reader_title <- renderText({
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			"Simple play reader"
+		} else {
+			"Simple plays reader"
+		} 	
+	})
+
+	# render reader text representation radio buttons
+	output$reader_radio_text_representation <- renderUI({
+		radioButtons("reader_radio_text_representation",
+					  label = "Select text representation:",
+					  choices = c("Raw text", "Embedded HTML"),
+					  selected =  "Raw text")
+	})
+
+	# render reader text
+	output$reader_text <- renderUI({
+
+		if(isTRUE(input$reader_radio_text_representation == "Embedded HTML")) {
+			link <- paste0(urlreadercorpus, "/", input$select_plays, "#text")
+			tags$iframe(src=link, height="100%", width="100%") 
+			
+		} else if(isTRUE(input$reader_radio_text_representation == "Raw text")) {
+
+			lang <- input$select_corpora
+
+			## only one play ##
+			if (!isTRUE(input$checkbox_multiple_plays)) {
+				textobj <- get_text(corpusobj = input$select_corpora,
+										url = urlcorpora,
+										play_name = input$select_plays)
+			## selected plays of an author ##
+			} else {
+				textobj <- parse_texts(corpusobj = input$select_corpora,
+										url = urlcorpora,
+										available_plays = selectplays(corp(), input$select_authors),
+										selected_plays = input$select_multiple_plays,
+										add_title = TRUE)
+			} 
+
+			HTML(gsub("\n", "<br>", textobj))
+		}
 	})
 
 	
@@ -698,10 +770,10 @@ server <- function(input, output) {
 
 	# render dynamic tab title
 	output$wordfreqtitle <- renderText({
-		if (!isTRUE(input$checkbox_allplays)) {
+		if (!isTRUE(input$checkbox_multiple_plays)) {
 			"Word frequencies of a single play"
 		} else {
-			"Word frequencies of all plays of an author"
+			"Word frequencies of selected plays of an author"
 		} 
 	})
 
@@ -728,44 +800,36 @@ server <- function(input, output) {
 
 	# render word frequency table
 	output$wordfreq_table <- DT::renderDataTable({
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 
 		## only one play ##
-		if (!isTRUE(input$checkbox_allplays)) {
+		if (!isTRUE(input$checkbox_multiple_plays)) {
 
-			playtext <- get_text(corpusobj = input$selectedcorpus,
+			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
-									play_name = input$selectedplay)
-
-
+									play_name = input$select_plays)
 
 			withProgress(message = 'Counting word frequencies', {
-				df <- wordfreqdf(playtext, 
-									lang, 
-									remove_punct = input$checkbox_punctation,
-									tolower = input$checkbox_lowercase, 
-									remove_stopwords = input$checkbox_stopwords)
+				df <- wordfreqdf(textobj, 
+								lang, 
+								remove_punct = input$checkbox_punctation,
+								tolower = input$checkbox_lowercase, 
+								remove_stopwords = input$checkbox_stopwords)
 			})
 
-			DT::datatable(df,
-						  filter = 'top', 
-						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-										 orderClasses = TRUE,
-										 pageLength = 10),
-						  selection = "none")	
-		## all plays of an author ##
+				
+		## selected plays of an author ##
 		} else {
-			playnames <- selectplays(corp(), input$selectedauthor)
 
+			playnames <- get_playnames(selectplays(corp(), input$select_authors),
+										input$select_multiple_plays)
 			n <- length(playnames)
 			dflist <- vector("list", n)
 
 			withProgress(message = 'Loading plays', value = 0, {
-				
 				i <- 1
 				for(play in playnames) {
-
-					playtext <- get_text(corpusobj = input$selectedcorpus,
+					playtext <- get_text(corpusobj = input$select_corpora,
 											url = urlcorpora,
 											play_name = play)
 					withProgress(message = 'Counting word frequencies', {
@@ -789,69 +853,43 @@ server <- function(input, output) {
 				df <- Reduce(combine_dfs, dflist)
 			})
 			
-			DT::datatable(df,
-						  filter = 'top', 
-						  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
-										 orderClasses = TRUE,
-										 pageLength = 10))
 		} 
+
+		DT::datatable(df,
+					  filter = 'top', 
+					  options = list(lengthMenu = c(5, 10, 20, 30, 50, 100),
+									 orderClasses = TRUE,
+									 pageLength = 10),
+					  selection = "none")
 	})
 
 	# render word frequency distribution 
 	output$wordfreq_distribution <- renderPlot({
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 
 		## only one play ##
-		if (!isTRUE(input$checkbox_allplays)) {
-			playtext <- get_text(corpusobj = input$selectedcorpus,
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
-									play_name = input$selectedplay)
+									play_name = input$select_plays)
 
-			withProgress(message = 'Counting word frequencies', {
-				frequency_distribution(playtext, 
-									   lang, 
-									   remove_punct = input$checkbox_punctation,
-									   tolower = input$checkbox_lowercase, 
-									   remove_stopwords = input$checkbox_stopwords,
-									   top_n_features = input$wordfreq_top_feature_slider,
-									   color_point = color_point)
-			})
-
-		## all plays of an author ##
+		## selected plays of an author ##
 		} else {
-			
-			playnames <- selectplays(corp(), input$selectedauthor)
-
-			n <- length(playnames)
-			allplays <- vector("list", n)
-
-			withProgress(message = 'Loading plays', value = 0, {
-				i <- 1
-				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
-											url = urlcorpora,
-											play_name = play)
-					allplays[[i]] <- playtext
-
-					# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-				}
-			})
-
-			textobj <- paste(allplays, sep = "", collapse = "")
-
-			withProgress(message = 'Counting word frequencies', {
-				frequency_distribution(textobj, 
-									   lang, 
-									   remove_punct = input$checkbox_punctation,
-									   tolower = input$checkbox_lowercase, 
-									   remove_stopwords = input$checkbox_stopwords,
-									   top_n_features = input$wordfreq_top_feature_slider,
-									   color_point = color_point) 
-			})
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_multiple_plays)
 		} 
+
+		withProgress(message = 'Counting word frequencies', {
+			frequency_distribution(textobj, 
+								   lang, 
+								   remove_punct = input$checkbox_punctation,
+								   tolower = input$checkbox_lowercase, 
+								   remove_stopwords = input$checkbox_stopwords,
+								   top_n_features = input$wordfreq_top_feature_slider,
+								   color_point = color_point)
+		})
 	})
 
 
@@ -863,13 +901,13 @@ server <- function(input, output) {
 
 	# render dynamic tab title
 	output$wordcloud_title <- renderText({
-		if (!isTRUE(input$checkbox_allplays)) {
+		if (!isTRUE(input$checkbox_multiple_plays)) {
 			"Wordcloud of a single play"
 		} else {
 			if (isTRUE(input$wordcloudtabselected == "wordcloud_tab_comparison")) {
-				"Comparison wordcloud of all plays of an author"
+				"Comparison wordcloud of selected plays"
 			} else {
-				"Wordcloud of all plays of an author"
+				"Wordcloud of selected plays"
 			}
 		} 
 	})
@@ -924,7 +962,9 @@ server <- function(input, output) {
 					value = 0.1)
 	})
 
+	
 	# render wordcloud window size panel entry
+	# EXPAND: higher max slider?
 	output$wordcloud_window_size <- renderUI({
 		sliderInput("wordcloud_window_size",
 					"Size:",
@@ -946,14 +986,12 @@ server <- function(input, output) {
 
 
 	# render play selection for wordcloud comparison
-	# EXPAND: different color scheme (a little bit complicated, see
-	#			https://github.com/dreamRs/shinyWidgets/issues/286 for placeholder)
-	output$wordcloud_comparison_plays <- renderUI({
+	output$select_wordcloud_comparison_plays <- renderUI({
 		if (is.null(corp())) return(NULL)
-		pickerInput(inputId = "wordcloud_comparison_plays",
+		pickerInput(inputId = "select_wordcloud_comparison_plays",
 			label = "Select the plays to be compared:",
-			choices = c(selectplays(corp(), input$selectedauthor)),
-			selected = c(selectplays(corp(), input$selectedauthor))[1:2],
+			choices = c(selectplays(corp(), input$select_authors)),
+			selected = c(selectplays(corp(), input$select_authors))[1:2],
 			multiple = TRUE,
 			options = pickerOptions(
 		        actionsBox = TRUE,
@@ -967,81 +1005,49 @@ server <- function(input, output) {
 	
 	# render HTML page with instructions on how to use the wordclouds
 	output$wordcloud_text <- renderUI({
-
 		if (isTRUE(input$wordcloudtabselected == "wordcloud_tab_comparison")) {
 			wordcloudhtml <- "www/wordcloudtext_comparison.html"
 		} else {
 			wordcloudhtml <- "www/wordcloudtext_simple.html"
 		}
-
 		includeHTML(wordcloudhtml)
 	})
 	
 	
-	# render one of three wordclouds: single play, all plays, all plays comparison
+	# render wordcloud of a single play or selected plays
 	output$wordcloud_plotter <- renderPlot({
 
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 
 		## only one play ##
-		if (!isTRUE(input$checkbox_allplays)) {
-			playtext <- get_text(corpusobj = input$selectedcorpus,
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
-									play_name = input$selectedplay)
-			withProgress(message = 'Generating word cloud', {
-				wordcloudplot(playtext, 
-							  lang, 
-							  remove_punct = input$checkbox_punctation,
-							  tolower = input$checkbox_lowercase, 
-							  remove_stopwords = input$checkbox_stopwords,
-							  color = colors_sequential,
-							  max_words = input$wordcloud_max_n_words,
-							  min_freq = input$wordcloud_min_freq,
-							  word_padding = input$wordcloud_word_padding)
-			})
-
-		## all plays of an author ##
-		} else {
-			playnames <- selectplays(corp(), input$selectedauthor)
-			n <- length(playnames)
-			allplays <- vector("list", n)
-
-			withProgress(message = 'Loading plays', value = 0, {
-				i <- 1
-				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
-											url = urlcorpora,
-											play_name = play)
-					allplays[[i]] <- playtext
-
-					# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-				}
-			})
-
-
-			textobj <- paste(allplays, sep = "", collapse = "")
-			colors <- colors_sequential2
-
+									play_name = input$select_plays)
 			
-			withProgress(message = 'Generating word cloud', {
+			colors <- colors_sequential
+
+		## selected plays of an author ##
+		} else {
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_multiple_plays)
+			colors <- colors_sequential2
+		} 
+
+		
+		withProgress(message = 'Generating word cloud', {
 				wordcloudplot(textobj, 
 							  lang, 
 							  remove_punct = input$checkbox_punctation,
 							  tolower = input$checkbox_lowercase, 
 							  remove_stopwords = input$checkbox_stopwords,
 							  color = colors,
-							  comparison = FALSE,
-							  labeloffset = input$wordcloud_label_padding,
-							  labelsize = input$wordcloud_label_size,
 							  max_words = input$wordcloud_max_n_words,
 							  min_freq= input$wordcloud_min_freq,
 							  word_padding = input$wordcloud_word_padding)
 			})
-			
-		} 
 	}, 
 	height=function(){300*input$wordcloud_window_size},
 	width=function(){300*input$wordcloud_window_size})
@@ -1049,53 +1055,29 @@ server <- function(input, output) {
 
 	# render comparison wordcloud
 	output$wordcloud_comparison_plotter <- renderPlot({
-
-		lang <- input$selectedcorpus
-
-
-		## get play names and "ids" from the user wordcloud comparison list input ##
-		all_available_plays <- selectplays(corp(), input$selectedauthor)
-		all_available_plays_names <- names(selectplays(corp(), input$selectedauthor))
-		selected_plays <- input$wordcloud_comparison_plays
-
-		playnames <- list()
-		i <- 1
-		for (element in all_available_plays) {
-			if(element %in% selected_plays) {
-				playnames[[all_available_plays_names[i]]] <- element
-				i <- i+1
-			}
-		}
-
-
+		playnames <- get_playnames(selectplays(corp(), input$select_authors),
+										input$select_wordcloud_comparison_plays)
 		n <- length(playnames)
 
-
-		## if author has more than one play and more than one play is selected ##
-		if (isTRUE(length(selectplays(corp(), input$selectedauthor)) > 1) &
+		# authors with only one play or only one selected play won't plot anything
+		if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
 			isTRUE(n > 1)) {
-			allplays <- vector("list", n)
 
-			withProgress(message = 'Loading plays', value = 0, {
-				i <- 1
-				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
-											url = urlcorpora,
-											play_name = play)
-					allplays[[i]] <- playtext
+			lang <- input$select_corpora
 
-					# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-				}
-			})
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_wordcloud_comparison_plays,
+									skip_union = TRUE)
 
-
-			names(allplays) <- names(playnames)
-			if (length(allplays) > 8) {
-				allplays <- allplays[1:8]
+			
+			names(textobj) <- names(playnames)
+			if (length(textobj) > 8) {
+				textobj <- textobj[1:8]
 			}
-			textobj <- corpus(unlist(allplays, use.names=TRUE))
+			
+			textobj <- corpus(unlist(textobj, use.names=TRUE))
 			colors <- colors_qualitative
 
 			
@@ -1115,8 +1097,7 @@ server <- function(input, output) {
 			})
 
 
-		}
-		
+		}		
 	}, 
 	height=function(){300*input$wordcloud_window_size},
 	width=function(){300*input$wordcloud_window_size})
@@ -1154,52 +1135,32 @@ server <- function(input, output) {
 	# render kwic word window slider
 	output$kwic_window_slider <- renderUI({
 		sliderInput("kwic_window_slider",
-					"Number of words before/after keyword",
+					"Number of words before/after keyword:",
 					min = 1,
 					max = 20,
 					step = 1,
 					value = 5)
 	})
 
-	# render wordcloud window size panel entry
-	# EXPAND: higher max slider?
-	output$wordcloud_window_size <- renderUI({
-		sliderInput("wordcloud_window_size",
-					"Size:",
-					min = 1,
-					max = 2.2,
-					step = 0.1,
-					value = 1.8)
-	})
+	
 
 	# render token selection
 	output$kwic_select_token <- renderUI({
 
-		lang <- input$selectedcorpus
-		if (!isTRUE(input$checkbox_allplays)) {
-			textobj <- get_text(corpusobj = input$selectedcorpus,
+		lang <- input$select_corpora
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			textobj <- get_text(corpusobj = input$select_corpora,
 								url = urlcorpora,
-								play_name = input$selectedplay)
+								play_name = input$select_plays)
 		} else {
-			playnames <- selectplays(corp(), input$selectedauthor)
-			n <- length(playnames)
-			allplays <- vector("list", n)
-
-			i <- 1
-			for(play in playnames) {
-				playtext <- get_text(corpusobj = input$selectedcorpus,
-										url = urlcorpora,
-										play_name = play)
-				allplays[[i]] <- playtext
-			}
-
-			textobj <- paste(allplays, sep = "", collapse = "")
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_multiple_plays)
 		}
 
 
-
-
-		# select sorting method ("alphabetical" or "frequency")
+		# select sorting method ("alphabetical", "most frequent words" or no sorting)
 		if(isTRUE(input$kwic_radio_sorting == "alphabetical")) {
 			token_list <- get_tokens(textobj,
 									lang,
@@ -1207,7 +1168,7 @@ server <- function(input, output) {
 									remove_punct = input$checkbox_punctation,
 									remove_stopwords = input$checkbox_stopwords,
 									sort_by = "alphabetical")
-		} else if (isTruthy(input$kwic_radio_sorting == "most frequent words")) {
+		} else if(isTRUE(input$kwic_radio_sorting == "most frequent words")) {
 			token_list <- get_tokens(textobj,
 									lang,
 									tolower = input$checkbox_lowercase,
@@ -1236,45 +1197,32 @@ server <- function(input, output) {
 	# render kwic table
 	output$kwic_table <- DT::renderDataTable({
 
-		lang <- input$selectedcorpus
+		lang <- input$select_corpora
 		textobj <- ""
 		docname <- ""
 
 		## only one play ##
-		if (!isTRUE(input$checkbox_allplays)) {
-			textobj <- get_text(corpusobj = input$selectedcorpus,
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
-									play_name = input$selectedplay)
-			playnames <- selectplays(corp(), input$selectedauthor)
-			docname <- names(playnames)[playnames == input$selectedplay]
-			
+									play_name = input$select_plays)
+			playnames <- selectplays(corp(), input$select_authors)
+			docname <- names(playnames)[playnames == input$select_plays]
 
-		## all plays of an author ##
+		## selected plays of an author ##
 		} else {
-			playnames <- selectplays(corp(), input$selectedauthor)
-			n <- length(playnames)
-			allplays <- vector("list", n)
+			playnames <- get_playnames(selectplays(corp(), input$select_authors), input$select_multiple_plays)
+			tmp_textobj <- parse_texts(corpusobj = input$select_corpora,
+										url = urlcorpora,
+										available_plays = selectplays(corp(), input$select_authors),
+										selected_plays = input$select_multiple_plays,
+										skip_union = TRUE)
 
-			withProgress(message = 'Loading plays', value = 0, {
-				i <- 1
-				for(play in playnames) {
-					playtext <- get_text(corpusobj = input$selectedcorpus,
-											url = urlcorpora,
-											play_name = play)
-					allplays[[i]] <- playtext
-
-					# Increment the progress bar, and update the detail text.
-					incProgress(1/n, detail = paste("Play", i, "of", n))
-					i <- i + 1
-
-				}
-			})
-
-			if (length(allplays) > 1) {
-				names(allplays) <- names(playnames)
-				textobj <- corpus(unlist(allplays, use.names=TRUE))
+			if (length(tmp_textobj) > 1) {
+				names(tmp_textobj) <- names(playnames)
+				textobj <- corpus(unlist(tmp_textobj, use.names=TRUE))
 			} else {
-				textobj <- paste(allplays, sep = "", collapse = "")
+				textobj <- paste(tmp_textobj, sep = "", collapse = "")
 				docname <- names(playnames)[[1]]
 			}
 		} 

@@ -26,8 +26,6 @@ extractdramas <- function(urlcorpus) {
 	return(fromJSON(urlcorpus, flatten = TRUE)$dramas)
 }
 
-
-
 selectauthors <- function(corpus) {
 	#' Selects list of authors from corpus.
 	#'
@@ -148,6 +146,30 @@ get_lexical_diversity_name <- function(lexical_diversity_measure) {
 	}
 }
 
+get_playnames <- function(available_plays, selected_plays) {
+	#' Selects plays from a list of plays and returns them in a list with names.
+	#' 
+	#' Takes a list of all available plays of an author and a list of plays which
+	#' should be selected and returns a list of the selected plays with names,
+	#' taken from the available plays list,
+	#'
+	#' @param available_plays list of all available plays of an author.
+	#' @param selected_plays list of plays which should be selected.
+
+	available_plays_names <- names(available_plays)
+
+	playnames <- list()
+	i <- 1
+	for (element in available_plays) {
+		if(element %in% selected_plays) {
+			playnames[[available_plays_names[i]]] <- element
+			i <- i+1
+		}
+	}
+	return(playnames)
+}
+
+
 get_stopwords <- function(lang) {
 	#' Get a list of stopwords by its language.
 	#'
@@ -242,6 +264,66 @@ get_tokens <- function(textobj,
 
 	return(toks)
 }
+
+
+
+parse_texts <- function(corpusobj,
+						url,
+						available_plays = list(),
+						selected_plays = list(),
+						add_title = FALSE,
+						skip_union = FALSE) {
+	#' Takes a corpus object and returns a string (or list) with all
+	#' selected plays in it.
+	#'
+	#' Takes a corpus object, a list of all plays of the author and a list
+	#' with plays to be selected. The names for the selected plays will be
+	#' gathered with the help of the list of all plays. The function returns
+	#' then a string (or list) of all selected plays, the text is gathered
+	#' by the plays names.
+	#'
+	#' @param corpusobj shiny corpus object.
+	#' @param url a string with an url to the plain text of an url.
+	#' @param available_plays list of all available plays of an author.
+	#' @param selected_plays list of plays which should be selected.
+	#' @param add_title boolean if title should be added to play text.
+	#' @param skip_union boolean if union of selected plays to a string
+	#'		  should be skipped. If TRUE, a list of plays is returned.
+
+	
+	playnames <- get_playnames(available_plays, selected_plays) 
+
+	n <- length(playnames)
+	tmp_textobj <- vector("list", n)
+
+	withProgress(message = 'Loading plays', value = 0, {
+		i <- 1
+		for(play in playnames) {
+			playtext <- get_text(corpusobj = corpusobj,
+									url = url,
+									play_name = play)
+			tmp_textobj[[i]] <- playtext
+
+			if(isTRUE(add_title)) {
+				playtitle <- names(playnames)[[i]]
+				tmp_textobj[[i]] <- paste0("<br><h2>", playtitle, "</h2><br>", playtext)
+			}
+
+			# Increment the progress bar, and update the detail text.
+			incProgress(1/n, detail = paste("Play", i, "of", n))
+			i <- i + 1
+		}
+	})
+
+	if(!isTRUE(skip_union)) {
+		textobj <- paste(tmp_textobj, sep = "", collapse = "")
+	} else {
+		textobj <- tmp_textobj
+	}
+
+	return(textobj)
+}
+
 
 ##################
 # tool functions #
@@ -339,7 +421,7 @@ kwic_df <- function(textobj,
 
 
 statistics_df <- function(textobj, lang, 
-							all_plays = FALSE,
+							multiple_plays = FALSE,
 							remove_punct = TRUE,
 							tolower = TRUE, 
 							remove_stopwords = FALSE,
@@ -353,6 +435,7 @@ statistics_df <- function(textobj, lang,
 	#'
 	#' @param textobj text as string.
 	#' @param lang language identificator as string.
+	#' @param multiple_plays boolean if multiple plays will be used.
 	#' @param remove_punct boolean value if punctation should be removed.
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_stopwords boolean value if stopwords should be removed.
@@ -365,13 +448,12 @@ statistics_df <- function(textobj, lang,
 
 	
 
-	if (isTRUE(all_plays)) {
-		string_play_name <- "all plays"
+	if (isTRUE(multiple_plays)) {
+		string_play_name <- "selected plays"
 	} else {
 		string_play_name <- "the play"
 	}
 	
-
 
 	# stats summary
 	toks_no_sw <- get_tokens(textobj, lang,
