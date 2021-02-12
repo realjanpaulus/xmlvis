@@ -1,5 +1,6 @@
 library(curl)
 library(docstring, warn.conflicts = FALSE)
+library(dplyr, warn.conflicts = FALSE)
 library(DT)
 library(jsonlite, warn.conflicts = FALSE)
 library(methods)
@@ -240,14 +241,14 @@ get_tokens <- function(textobj,
 
 	# most frequent words in descending order
 	} else if (isTRUE(sort_by == "mfw")) {
-		df <- wordfreqdf(textobj, lang, 
+		df <- freq_df(textobj, lang, 
 							remove_punct = remove_punct,
 							tolower = tolower, 
 							remove_stopwords = remove_stopwords)
 		toks <- c(df[["feature"]])
 	# most frequent words + their frequency in parantheses in descending order
 	} else if (isTRUE(sort_by == "mfw+")) {
-		df <- wordfreqdf(textobj, lang, 
+		df <- freq_df(textobj, lang, 
 							remove_punct = remove_punct,
 							tolower = tolower, 
 							remove_stopwords = remove_stopwords)
@@ -330,12 +331,50 @@ parse_texts <- function(corpusobj,
 ##################
 
 
+freq_df <- function(textobj, lang, 
+					   remove_punct = TRUE,
+					   tolower = TRUE, 
+					   remove_stopwords = FALSE,
+					   top_n_features = NULL) {
+	#' Extracts term and document frequencies from a plain text 
+	#' or a quanteda corpus object.
+	#'
+	#' Takes plain text of a play or a quanteda corpus object 
+	#' and creates a dataframe with term and document frequencies of the text. 
+	#' Columns "rank" and "group" are removed.
+	#'
+	#' @param playtext text of the play as string.
+	#' @param lang language identificator as string.
+	#' @param remove_punct boolean value if punctation should be removed.
+	#' @param tolower boolean value if words should be converted to lowercase.
+	#' @param remove_stopwords boolean value if stopwords should be removed.
+	#' @param top_n_features numerical value which indicates the top n features.
+	
+
+	df <- documenttermdf(textobj, lang, 
+						 remove_punct = remove_punct,
+					   	 tolower = tolower, 
+					   	 remove_stopwords = remove_stopwords)
+	
+
+	return(subset(textstat_frequency(df, n=top_n_features), select=-c(rank, group)))
+}
+
+
 frequency_distribution <- function(textobj, lang, 
-								   remove_punct = TRUE,
-						  		   tolower = TRUE, 
-						  		   remove_stopwords = FALSE,
-						  		   top_n_features = 100,
-						  		   color_point = "#8DA0CB") {
+									remove_punct = TRUE,
+						  			tolower = TRUE, 
+						  			remove_stopwords = FALSE,
+						  			all_playnames = list(),
+						  			author_name = "",
+						  			color_point = "#8DA0CB",
+						  			frequency_method = "Relative Frequencies",
+						  			multiple_plays = FALSE,
+						  			play_name = "",
+						  			plot_title_linebreak = FALSE,
+									plot_title_size = 22,
+									revert_order = FALSE,
+									top_n_features = 100) {
 	#' Creates a frequency distribution from a text.
 	#'
 	#' Takes a plain text or quanteda corpus object, computes a word frequency
@@ -346,15 +385,68 @@ frequency_distribution <- function(textobj, lang,
 	#' @param remove_punct boolean value if punctation should be removed.
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_stopwords boolean value if stopwords should be removed.
-	#' @param top_n_features numerical value which indicates the top n features.
+	#' @param all_playnames list with names of all plays of the author.
+	#' @param author_name string name of the author.
 	#' @param color_point hex code as string which indicates the color of the points.
-	df <- wordfreqdf(textobj, lang, 
+	#' @param frequency_method string name of the frequency method ("Relative Frequencies"
+	#'		  or "Absolute Frequencies").
+	#' @param multiple_plays boolean if mutliple plays are used.
+	#' @param play_name string name of the play.
+	#' @param plot_title_linebreak boolean if plot title should contain linebreak.
+	#' @param plot_title_size numeric which indicates size of plot title.
+	#' @param revert_order boolean if frequencies should be sorted in
+	#'		  ascending or descending order.
+	#' @param top_n_features numerical value which indicates the top n features.
+
+
+	if (isTRUE(plot_title_linebreak)) {
+		lb <- "\n"
+	} else {
+		lb <- ""
+	}
+
+	if(isTRUE(multiple_plays)) {
+		plot_title <- paste0("Word frequency distribution ", lb, 
+						"of the selected plays by '", author_name, "'")
+	} else {
+		playnames <- get_playnames(all_playnames, play_name) 
+		playname <- names(unlist(playnames))[1]
+
+		plot_title <- paste0("Word frequency distribution ", lb, 
+						"of the play '", playname, "' by '", author_name, "'")
+	}
+
+
+
+	df <- freq_df(textobj, lang, 
 					 remove_punct = remove_punct,
 					 tolower = tolower, 
 					 remove_stopwords = remove_stopwords,
 					 top_n_features = top_n_features)
 
-	df$feature <- with(df, reorder(feature, -frequency))
+
+	if(frequency_method == "Relative Frequencies") {
+		toks <- get_tokens(textobj, 
+							lang = lang,
+							tolower = tolower,
+							remove_punct = remove_punct,
+							remove_stopwords = remove_stopwords)
+		token_count <- textstat_summary(toks)[["tokens"]]
+		df <- dplyr::mutate(df, frequency = frequency/token_count)
+
+		y_col_name <- "Relative frequency"
+	} else {
+		y_col_name <- "Absolute frequency"
+	}
+
+
+	if(isTRUE(revert_order)) {
+		df$feature <- with(df, reorder(feature, frequency))
+	} else {
+		df$feature <- with(df, reorder(feature, -frequency))
+	}
+
+	
 
 
 	# EXPAND: different size, base_size values for different corpora
@@ -372,12 +464,17 @@ frequency_distribution <- function(textobj, lang,
 		base_size = 8
 	}
 
-	g <- ggplot(data = df, 
-				aes(x = feature, y = frequency)) + 
+
+	
+
+	g <- ggplot(data = df, aes(x = feature, y = frequency)) + 
 				geom_point(colour=color_point, size=size) + 
+				labs(title = plot_title, y = y_col_name, x = "Features") +
 				scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) + 
 				theme_bw(base_size=base_size) + 
-				theme(axis.text.x = element_text(angle = 90, hjust = 1))
+				theme(axis.text.x = element_text(angle = 90, hjust = 1),
+						plot.title = element_text(size=plot_title_size,
+													margin=margin(0,0,10,0)))
 
 	return(g)
 }
@@ -416,7 +513,6 @@ kwic_df <- function(textobj,
 	names(df)[names(df) == 'from'] <- 'from/to'
 	return(df)
 }
-
 
 
 
@@ -476,11 +572,23 @@ statistics_df <- function(textobj, lang,
 		stats_summary <- stats_summary_sw
 	}
 
-	
+
+
 
 	## word counts ##
 	tokens_count <- stats_summary[["tokens"]]
 	types_count <- stats_summary[["types"]]
+
+	## hapax legomenon ##
+
+	df <- freq_df(textobj, 
+					lang, 
+					remove_punct = remove_punct,
+					tolower = tolower, 
+					remove_stopwords = remove_stopwords)
+	
+	
+	hapax_legomenon <- nrow(subset(df, frequency==1))
 
 
 	## proportion stop words ##
@@ -521,6 +629,8 @@ statistics_df <- function(textobj, lang,
 								"</b>", string_length_play)
 	types_count_name <- paste0("<b>", "Unique word count of ", string_play_name, " (= <u>type</u> count)", 
 										"</b>", string_length_play)
+	hapax_legomenon_name <- paste0("<b>", "Count of Hapax legomenon in ", string_play_name, 
+										"</b>", string_length_play)
 	proportion_stopwords_name <- paste0("<b>", "Proportion of stop words in ", string_play_name, "</b>")
 	count_sentences_name <- paste0("<b>", "Count of sentences in ", string_play_name, "</b>")
 	count_numbers_name <- paste0("<b>", "Count of numbers in ", string_play_name, "</b>")
@@ -528,9 +638,9 @@ statistics_df <- function(textobj, lang,
 	readability_name <- paste0("<b>", "Text readability of ", string_play_name, "</b>")
 
 	
-	index_col <- c(tokens_count_name, types_count_name, proportion_stopwords_name, 
+	index_col <- c(tokens_count_name, types_count_name, hapax_legomenon_name, proportion_stopwords_name, 
 		count_sentences_name, count_numbers_name, lexical_diversity_name, readability_name)
-	result_col <- c(tokens_count, types_count, proportion_stopwords, count_sentences, 
+	result_col <- c(tokens_count, types_count, hapax_legomenon, proportion_stopwords, count_sentences, 
 					 count_numbers, lexical_diversity, readability)
 
 	df <- data.frame("name" = index_col, "result" = result_col)
@@ -616,6 +726,231 @@ statistics_distribution <- function(l,
 	return(g)
 }
 
+# todo
+trends_plays_plot <- function(playnames,
+								corpusobj,
+								lang, 
+								url, 
+								remove_punct = TRUE,
+								tolower = TRUE, 
+								remove_stopwords = FALSE,
+								author_name = "",
+								frequency_method = "Relative Frequencies",
+								target_word = "",
+								plot_title_linebreak = FALSE,
+								plot_title_size = 22) {
+	#'
+	#'
+	#' TODO
+	#'
+	#'
+
+	freq_list <- list()
+
+	i <- 1
+	for (play in playnames) {
+		playtext <- get_text(corpusobj = corpusobj,
+							url = url,
+							play_name = play)
+		playname <- names(playnames)[[i]]
+
+		frequency_df <- freq_df(playtext, 
+							lang, 
+							tolower = tolower,
+							remove_punct = remove_punct,
+							remove_stopwords = remove_stopwords) 
+
+		target_freq <- frequency_df$frequency[frequency_df$feature == target_word]
+
+
+		if(frequency_method == "Relative Frequencies") {
+			toks <- get_tokens(playtext, 
+								lang = lang,
+								tolower = tolower,
+								remove_punct = remove_punct,
+								remove_stopwords = remove_stopwords)
+			token_count <- textstat_summary(toks)[["tokens"]]
+			target_freq <- target_freq / token_count
+		}
+
+		freq_list[[playname]] <- target_freq
+
+		i <- i + 1
+	}
+
+	if(isTRUE(frequency_method == "Relative Frequencies")) {
+		y_col_name <- "Relative Frequencies"
+	} else {
+		y_col_name <- "Absolute Frequencies"
+	}
+
+
+	n <- length(freq_list)
+	name_col <- stringr::str_trunc(names(unlist(freq_list)), 20)
+	freq_col <- as.numeric(paste(unlist(freq_list)))
+	df <- data.frame("name" =  name_col, "frequency" = freq_col)
+
+	if(n < 5) {
+		base_size <- 20
+		point_size <- 5
+	} else if((n >= 5) & (n < 10)) {
+		base_size <- 17
+		point_size <- 4
+	} else if((n >= 10) & (n < 20)) {
+		base_size <- 14
+		point_size <- 3
+	} else {
+		base_size <- 12
+		point_size <- 2
+	}
+	if (isTRUE(plot_title_linebreak)) {
+		lb <- "\n"
+	} else {
+		lb <- ""
+	}
+
+	plot_title <- paste0("The word '", target_word, "' in the segments ", lb, 
+						"of the selected plays by '", author_name, "'")
+
+	g <- ggplot(data = df, 
+			aes(x = name, y = frequency)) + 
+			geom_point(colour="#8DA0CB", size = point_size) +
+			geom_line() + # todo
+			labs(title = plot_title, y = y_col_name, x = "Selected plays") + 
+			scale_y_continuous(limits = c(0, max(df$frequency) * 1.5)) + 
+			theme_bw(base_size=base_size) + 
+			theme(axis.text.x = element_text(angle = 90, hjust = 1),
+					plot.title = element_text(size=plot_title_size,
+												margin=margin(0,0,10,0)))
+
+
+	
+
+	return(g)
+
+
+}
+
+
+#todo
+trends_segments_plot <- function(textobj, 
+								lang, 
+								url, 
+								remove_punct = TRUE,
+								tolower = TRUE, 
+								remove_stopwords = FALSE,
+								n_segments = 10,
+								author_name = "",
+								all_playnames = "",
+								target_word = "",
+								play_name = "",
+								frequency_method = "Absolute Frequencies",
+								plot_title_linebreak = FALSE,
+								plot_title_size = 22) {
+	#'
+	#'
+	#' TODO
+	#'
+	#'
+
+	playnames <- get_playnames(all_playnames, play_name) 
+	playname <- names(unlist(playnames))[1]
+
+	toks <- get_tokens(textobj, 
+						lang = lang,
+						tolower = tolower,
+						remove_punct = remove_punct,
+						remove_stopwords = remove_stopwords)
+
+	token_count <- textstat_summary(toks)[["tokens"]]
+
+
+	segment_size <- ceiling(token_count / n_segments)
+	tok_segments <- tokens_chunk(toks, size = segment_size)
+	target_word_counts <- list()
+	segments_list <- seq(1:length(tok_segments))
+
+	i <- 1
+	for(element in segments_list) {
+
+		frequency_df <- freq_df(tok_segments[paste0("text1.", i)], 
+							lang, 
+							tolower = tolower,
+							remove_punct = remove_punct,
+							remove_stopwords = remove_stopwords) 
+
+		target_freq <- frequency_df$frequency[frequency_df$feature == target_word]
+
+		# check for numeric(0)
+		if(length(target_freq) == 0) {
+			target_freq <- 0
+		}
+
+		target_word_counts[[i]] <- target_freq
+		i <- i + 1
+	}
+
+	df <- data.frame("segment" = segments_list,
+					"frequency" = unlist(target_word_counts))
+
+	# absolute or relative frequencies
+
+	if(isTRUE(frequency_method == "Relative Frequencies")) {
+		y_col_name <- "Relative Frequencies"
+		df["frequency"] <- lapply(df["frequency"], function(x) x/token_count)
+	} else {
+		y_col_name <- "Absolute Frequencies"
+	}
+
+
+	
+	
+	### plotting ###
+
+
+	if(n_segments < 5) {
+		base_size <- 22
+		point_size <- 5
+	} else if((n_segments >= 5) & (n_segments < 10)) {
+		base_size <- 20
+		point_size <- 4
+	} else if((n_segments >= 10) & (n_segments < 15)) {
+		base_size <- 18
+		point_size <- 3
+	} else if((n_segments >= 15) & (n_segments <= 20)) {
+		base_size <- 16
+		point_size <- 2
+	} else {
+		base_size <- 14
+		point_size <- 1
+	}
+
+	if (isTRUE(plot_title_linebreak)) {
+		lb <- "\n"
+	} else {
+		lb <- ""
+	}
+
+
+	plot_title <- paste0("The word '", target_word, "' in the segments ", lb, 
+					"of the play '", playname, "' by '", author_name, "'")
+	
+	
+	g <- ggplot(data = df, aes(x = segment, y = frequency)) + 
+			geom_line() +
+			geom_point(colour="#8DA0CB", size=point_size) +
+			labs(title =  plot_title, y = y_col_name, x = "Segments") + 
+			scale_x_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) + 
+			scale_y_continuous(limits = c(0, max(df$frequency) * 1.5)) +
+			theme_bw(base_size=base_size) + 
+			theme(plot.title = element_text(size=plot_title_size,
+											margin=margin(0,0,10,0)))
+	
+
+	return(g)
+
+}
+
 
 wordcloudplot <- function(textobj, lang, 
 						  remove_punct = TRUE,
@@ -666,35 +1001,6 @@ wordcloudplot <- function(textobj, lang,
 							  labelsize = labelsize,
 							  max_words = max_words,
 							  min_count = min_freq))
-}
-
-wordfreqdf <- function(textobj, lang, 
-					   remove_punct = TRUE,
-					   tolower = TRUE, 
-					   remove_stopwords = FALSE,
-					   top_n_features = NULL) {
-	#' Extracts term and document frequencies from a plain text 
-	#' or a quanteda corpus object.
-	#'
-	#' Takes plain text of a play or a quanteda corpus object 
-	#' and creates a dataframe with term and document frequencies of the text. 
-	#' Columns "rank" and "group" are removed.
-	#'
-	#' @param playtext text of the play as string.
-	#' @param lang language identificator as string.
-	#' @param remove_punct boolean value if punctation should be removed.
-	#' @param tolower boolean value if words should be converted to lowercase.
-	#' @param remove_stopwords boolean value if stopwords should be removed.
-	#' @param top_n_features numerical value which indicates the top n features.
-	
-
-	df <- documenttermdf(textobj, lang, 
-						 remove_punct = remove_punct,
-					   	 tolower = tolower, 
-					   	 remove_stopwords = remove_stopwords)
-	
-
-	return(subset(textstat_frequency(df, n=top_n_features), select=-c(rank, group)))
 }
 
 

@@ -19,10 +19,10 @@ source("utils.R")
 
 about <- "www/about.html"
 kwichtml <- "www/kwictext.html"
-more <- "www/more.html"
 statisticshtml <- "www/statistics_overviewtable.html"
+trendshtml <- "www/trendstext.html"
 wordcloudhtml <- "www/wordcloudtext_simple.html"
-wordfreqhtml <- "www/wordfreqtext.html"
+wordfreqhtml <- "www/wordfreqtext_table.html"
 
 
 urlreadercorpus <- "https://dracor.org/ger"
@@ -53,9 +53,9 @@ ui <- fluidPage(theme = shinytheme("united"),
 				conditionalPanel(condition = "(input.tabselected == 'reader' &&
 												input.reader_radio_text_representation == 'Raw text') ||
 												input.tabselected == 'freq' ||
+												input.tabselected == 'trends' ||
 												input.tabselected == 'kwic' ||
 												input.tabselected == 'about' ||
-												input.tabselected == 'more' ||
 												(input.tabselected == 'stats' && 
 													input.statstabselected == 'stats_tab_table') ||
 												(input.tabselected == 'cloud' && 
@@ -126,7 +126,11 @@ ui <- fluidPage(theme = shinytheme("united"),
 				conditionalPanel(condition = "input.tabselected == 'freq' 
 												&& input.wordfreqtabselected == 'Distribution'",
 					uiOutput("wordfreq_panel_title"),
-					uiOutput("wordfreq_top_feature_slider")
+					uiOutput("wordfreq_checkbox_plot_revert"),
+					uiOutput("wordfreq_top_feature_slider"),
+					uiOutput("wordfreq_frequency_radio"),
+					uiOutput("wordfreq_checkbox_plot_title_linebreak"),
+					uiOutput("wordfreq_plot_title_size_slider")
 				),
 				# wordcloud panel
 				conditionalPanel(condition = "input.tabselected == 'cloud'",
@@ -144,6 +148,16 @@ ui <- fluidPage(theme = shinytheme("united"),
 					#		  for other languages with a non-latin script
 					uiOutput("wordcloud_word_padding"),
 					uiOutput("wordcloud_window_size")	
+				),
+				# trends panel
+				conditionalPanel(condition = "input.tabselected == 'trends'",
+					uiOutput("trends_panel_title"),
+					uiOutput("trends_n_segments"),
+					uiOutput("trends_frequency_radio"),
+					uiOutput("trends_radio_sorting"),
+					uiOutput("trends_select_token"),
+					uiOutput("trends_checkbox_plot_title_linebreak"),
+					uiOutput("trends_plot_title_size_slider")
 				),
 				# kwic panel
 				conditionalPanel(condition = "input.tabselected == 'kwic'",
@@ -255,6 +269,19 @@ ui <- fluidPage(theme = shinytheme("united"),
 								   uiOutput("wordcloud_text")) 
 						 ),
 						 value="cloud"),
+				tabPanel(title = "Trends",
+						fluidRow(
+							column(width = 6,
+									align="left",
+									style="padding-top: 10px;",
+									titlePanel(uiOutput("trends_title")),
+									br(),
+									plotOutput(outputId = "trends_plotter")),
+							column(width=6, 
+								   style="padding-top: 5px; padding-right: 22px;",
+								   uiOutput("trends_text"))
+						),
+						value="trends"),
 				tabPanel(title = "KWIC",
 						fluidRow(
 							column(width=6,
@@ -269,8 +296,7 @@ ui <- fluidPage(theme = shinytheme("united"),
 								   uiOutput("kwic_text"))
 						),
 						value="kwic"),
-				tabPanel(title = "About", includeHTML(about), value="about"),
-				tabPanel(title = "More", includeHTML(more), value="more")
+				tabPanel(title = "About", includeHTML(about), value="about")
 			)
 		)
 	)
@@ -782,6 +808,14 @@ server <- function(input, output) {
 		"<h4><u>Word frequencies options</u></h4>"
 	})
 
+
+	# render order of frequencies in wordfreq plot
+	output$wordfreq_checkbox_plot_revert <- renderUI({
+		checkboxInput("wordfreq_checkbox_plot_revert",
+					  label = "Revert the order of the frequencies",
+					  value = FALSE)
+	})
+
 	# render wordfreq top n features slider
 	output$wordfreq_top_feature_slider <- renderUI({
 		sliderInput("wordfreq_top_feature_slider",
@@ -792,9 +826,39 @@ server <- function(input, output) {
 					value = 20)
 	})
 
+	# render wordfreq plot frequency method
+	output$wordfreq_frequency_radio <- renderUI({
+		radioButtons("wordfreq_frequency_radio",
+					  label = "Select frequency method:",
+					  choices = c("Relative Frequencies", "Absolute Frequencies"),
+					  selected =  "Absolute Frequencies")
+	})
 
-	# render HTML page with instructions on how to use table
+	# render checkbox for wordfreq distribution title linebreak option
+	output$wordfreq_checkbox_plot_title_linebreak <- renderUI({
+		checkboxInput("wordfreq_checkbox_plot_title_linebreak",
+					  label = "Use a linebreak in the title of the plot",
+					  value = TRUE)
+	})
+
+	# render slider for wordfreq distribution title size
+	output$wordfreq_plot_title_size_slider <- renderUI({
+		sliderInput("wordfreq_plot_title_size_slider",
+					"Plot title size:",
+					min = 5,
+					max = 40, 
+					step = 1,
+					value = 22)
+	})
+
+
+	# render HTML page with instructions on how to use table or distribution
 	output$wordfreq_text <- renderUI({
+		if (isTRUE(input$wordfreqtabselected == "Table")) {
+			wordfreqhtml <- "www/wordfreqtext_table.html"
+		} else if(isTRUE(input$wordfreqtabselected == "Distribution")) {
+			wordfreqhtml <- "www/wordfreqtext_plot.html"
+		}
 		includeHTML(wordfreqhtml)
 	})
 
@@ -810,7 +874,7 @@ server <- function(input, output) {
 									play_name = input$select_plays)
 
 			withProgress(message = 'Counting word frequencies', {
-				df <- wordfreqdf(textobj, 
+				df <- freq_df(textobj, 
 								lang, 
 								remove_punct = input$checkbox_punctation,
 								tolower = input$checkbox_lowercase, 
@@ -833,7 +897,7 @@ server <- function(input, output) {
 											url = urlcorpora,
 											play_name = play)
 					withProgress(message = 'Counting word frequencies', {
-						df <- wordfreqdf(playtext, 
+						df <- freq_df(playtext, 
 										lang, 
 										remove_punct = input$checkbox_punctation,
 										tolower = input$checkbox_lowercase, 
@@ -883,12 +947,20 @@ server <- function(input, output) {
 
 		withProgress(message = 'Counting word frequencies', {
 			frequency_distribution(textobj, 
-								   lang, 
-								   remove_punct = input$checkbox_punctation,
-								   tolower = input$checkbox_lowercase, 
-								   remove_stopwords = input$checkbox_stopwords,
-								   top_n_features = input$wordfreq_top_feature_slider,
-								   color_point = color_point)
+									lang, 
+									remove_punct = input$checkbox_punctation,
+									tolower = input$checkbox_lowercase, 
+									remove_stopwords = input$checkbox_stopwords,
+									all_playnames = selectplays(corp(), input$select_authors),
+									author_name = input$select_authors,
+									color_point = color_point,
+									frequency_method = input$wordfreq_frequency_radio,
+						  			multiple_plays = isTRUE(input$checkbox_multiple_plays),
+						  			play_name = input$select_plays,
+						  			plot_title_linebreak = input$wordfreq_checkbox_plot_title_linebreak,
+									plot_title_size = input$wordfreq_plot_title_size_slider,
+									revert_order = input$wordfreq_checkbox_plot_revert,
+						  			top_n_features = input$wordfreq_top_feature_slider)
 		})
 	})
 
@@ -1095,12 +1167,208 @@ server <- function(input, output) {
 							  min_freq= input$wordcloud_min_freq,
 							  word_padding = input$wordcloud_word_padding)
 			})
-
-
 		}		
 	}, 
 	height=function(){300*input$wordcloud_window_size},
 	width=function(){300*input$wordcloud_window_size})
+
+
+	##########################
+	### Render tab: Trends ###
+	##########################
+
+	# render trends title
+	output$trends_title <- renderText({
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			"Trends of a single play"
+		} else {
+			"Trends of selected plays"
+		} 
+	})
+
+	# render HTML page with instructions on how to use the trends
+	output$trends_text <- renderUI({
+		includeHTML(trendshtml)
+	})
+
+
+	#### todo ####
+	# implement
+
+	# render trends panel title
+	output$trends_panel_title <- renderText({
+		"<h4><u>Trends options</u></h4>"
+	})
+
+	# render trends sorting radio buttons
+	output$trends_radio_sorting <- renderUI({
+		radioButtons("trends_radio_sorting",
+					  label = "Select target word sorting method:",
+					  choices = c("alphabetical", "most frequent words"),
+					  selected =  "most frequent words")
+	})
+
+	# render trends token selection
+	output$trends_select_token <- renderUI({
+
+		lang <- input$select_corpora
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			textobj <- get_text(corpusobj = input$select_corpora,
+								url = urlcorpora,
+								play_name = input$select_plays)
+		} else {
+			textobj <- parse_texts(corpusobj = input$select_corpora,
+									url = urlcorpora,
+									available_plays = selectplays(corp(), input$select_authors),
+									selected_plays = input$select_multiple_plays)
+		}
+
+
+		# select sorting method ("alphabetical", "most frequent words" or no sorting)
+		if(isTRUE(input$trends_radio_sorting == "alphabetical")) {
+			token_list <- get_tokens(textobj,
+									lang,
+									tolower = input$checkbox_lowercase,
+									remove_punct = input$checkbox_punctation,
+									remove_stopwords = input$checkbox_stopwords,
+									sort_by = "alphabetical")
+		} else if(isTRUE(input$trends_radio_sorting == "most frequent words")) {
+			token_list <- get_tokens(textobj,
+									lang,
+									tolower = input$checkbox_lowercase,
+									remove_punct = input$checkbox_punctation,
+									remove_stopwords = input$checkbox_stopwords,
+									sort_by = "mfw+")
+		} else {
+			token_list <- get_tokens(textobj,
+									lang,
+									tolower = input$checkbox_lowercase,
+									remove_punct = input$checkbox_punctation,
+									remove_stopwords = input$checkbox_stopwords,
+									sort_by = "")
+		}
+
+		selectizeInput("trends_select_token",
+					label = "Select a keyword:",
+					choices = token_list,
+					# EXPAND: for plays/combined plays with a higher token count
+					options = list(maxOptions = 500000), 
+					selected = "")
+	})
+
+	# EXPAND: max value 
+	# render slider for trends plot title size
+	output$trends_n_segments <- renderUI({
+		sliderInput("trends_n_segments",
+					"Number of segments:",
+					min = 2,
+					max = 50,
+					step = 1,
+					value = 5)
+	})
+
+
+	output$trends_frequency_radio <- renderUI({
+		radioButtons("trends_frequency_radio",
+					  label = "Select frequency method:",
+					  choices = c("Relative Frequencies", "Absolute Frequencies"),
+					  selected =  "Relative Frequencies")
+	})
+
+
+	# render checkbox for trends plot title linebreak option
+	output$trends_checkbox_plot_title_linebreak <- renderUI({
+		checkboxInput("trends_checkbox_plot_title_linebreak",
+					  label = "Use a linebreak in the title of the plot",
+					  value = TRUE)
+	})
+
+	# render slider for trends plot title size
+	output$trends_plot_title_size_slider <- renderUI({
+		sliderInput("trends_plot_title_size_slider",
+					"Plot title size:",
+					min = 5,
+					max = 40, 
+					step = 1,
+					value = 22)
+	})
+
+
+	###### todo ######
+	
+	# render trends plot
+	output$trends_plotter <- renderPlot({
+
+		lang <- input$select_corpora
+
+
+		## only one play ##
+		if (!isTRUE(input$checkbox_multiple_plays)) {
+			
+			
+
+			textobj <- get_text(corpusobj = input$select_corpora,
+								url = urlcorpora,
+								play_name = input$select_plays)
+
+			withProgress(message = 'Generating trend plot', {
+				trends_segments_plot(textobj,
+									lang = lang,
+									url = urlcorpora,
+									remove_punct = input$checkbox_punctation,
+									tolower = input$checkbox_lowercase, 
+									remove_stopwords = input$checkbox_stopwords,
+									n_segments = input$trends_n_segments,
+									author_name = input$select_authors,
+									all_playnames = selectplays(corp(), input$select_authors),
+									target_word = sub(" *\\(.*", "", input$trends_select_token),
+									play_name = input$select_plays,
+									frequency_method = input$trends_frequency_radio,
+									plot_title_size = input$trends_plot_title_size_slider,
+									plot_title_linebreak = input$trends_checkbox_plot_title_linebreak)	
+			})
+
+
+		## selected plays of an author ##
+		} else {
+
+			playnames <- get_playnames(selectplays(corp(), input$select_authors), 
+										input$select_multiple_plays)
+
+
+			# authors with only one play or only one selected play won't plot anything
+			if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
+				isTRUE(length(playnames) > 1)) {
+				withProgress(message = 'Generating trend plot', {
+					#todo
+					trends_plays_plot(playnames,
+									corpusobj = input$select_corpora,
+									url = urlcorpora,
+									lang = lang,
+									remove_punct = input$checkbox_punctation,
+									tolower = input$checkbox_lowercase, 
+									remove_stopwords = input$checkbox_stopwords,
+									author_name = input$select_authors,
+									frequency_method = input$trends_frequency_radio,
+									target_word = sub(" *\\(.*", "", input$trends_select_token),
+									plot_title_size = input$trends_plot_title_size_slider,
+									plot_title_linebreak = input$trends_checkbox_plot_title_linebreak) 
+				})
+			}
+		} 
+
+
+		
+		
+			
+
+
+		
+		
+	})
+	
+	
+
 
 
 	########################
@@ -1193,7 +1461,6 @@ server <- function(input, output) {
 	})
 
 	
-
 	# render kwic table
 	output$kwic_table <- DT::renderDataTable({
 
