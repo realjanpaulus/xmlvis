@@ -2,6 +2,8 @@
 
 **XMLvis** is a visualization and corpus insight tool for the corpora of the <a href="https://dracor.org/">DraCor</a> project.
 
+![UI](www/screenshot.png)
+
 The following table shows the supported corpora. Currently only the **German Drama Corpus** is supported.
 
 | DraCor corpora | supported | 
