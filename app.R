@@ -11,7 +11,6 @@ library(shiny, warn.conflicts = FALSE)
 library(shinycssloaders)
 library(shinythemes)
 library(shinyWidgets)
-library(XML)
 source("utils.R")
 
 
@@ -122,15 +121,19 @@ ui <- fluidPage(theme = shinytheme("united"),
 				conditionalPanel(condition = "input.tabselected == 'reader'",
 					uiOutput("reader_radio_text_representation")
 				),
-				# wordfrequency distribution panel
-				conditionalPanel(condition = "input.tabselected == 'freq' 
-												&& input.wordfreqtabselected == 'Distribution'",
+				# wordfrequency panel
+				conditionalPanel(condition = "input.tabselected == 'freq'",
 					uiOutput("wordfreq_panel_title"),
-					uiOutput("wordfreq_checkbox_plot_revert"),
-					uiOutput("wordfreq_top_feature_slider"),
 					uiOutput("wordfreq_frequency_radio"),
-					uiOutput("wordfreq_checkbox_plot_title_linebreak"),
-					uiOutput("wordfreq_plot_title_size_slider")
+					# wordfrequency distribution panel					
+					conditionalPanel(condition = "input.tabselected == 'freq' 
+												&& input.wordfreqtabselected == 'Distribution'",
+						uiOutput("wordfreq_checkbox_plot_revert"),
+						uiOutput("wordfreq_top_feature_slider"),
+						uiOutput("wordfreq_checkbox_plot_title_linebreak"),
+						uiOutput("wordfreq_plot_title_size_slider"),						
+					)
+					
 				),
 				# wordcloud panel
 				conditionalPanel(condition = "input.tabselected == 'cloud'",
@@ -300,7 +303,6 @@ ui <- fluidPage(theme = shinytheme("united"),
 			)
 		)
 	)
-
 )
 
 # ============================== #
@@ -346,14 +348,18 @@ server <- function(input, output) {
 					choices = selectplays(corp(), input$select_authors))
 	})
 
-	# todo: noch mehr einstellungen?
 	# render various play selection
 	output$select_multiple_plays <- renderUI({
 		if (is.null(corp() )) return(NULL)
+		if(input$tabselected == "trends") {
+			selected_l <- c(selectplays(corp(), input$select_authors))[1:2]
+		} else {
+			selected_l <- c(selectplays(corp(), input$select_authors))[1]
+		}
 		pickerInput("select_multiple_plays", 
 					label = "Choose his/her plays:",
 					choices = c(selectplays(corp(), input$select_authors)),
-					selected = c(selectplays(corp(), input$select_authors))[1],
+					selected = selected_l,
 					multiple = TRUE,
 					options = pickerOptions(
 					        actionsBox = TRUE,
@@ -364,7 +370,7 @@ server <- function(input, output) {
 					)
 	})
 
-	# todo: noch mehr einstellungen?
+
 	# render various play selection (special)
 	output$select_multiple_plays_special <- renderUI({
 		if (is.null(corp() )) return(NULL)
@@ -426,9 +432,9 @@ server <- function(input, output) {
 	})
 
 
-	######################################
-	### Render tab: Play(s) statistics ###
-	#######################################
+	##############################
+	### Render tab: Statistics ###
+	##############################
 
 	
 	# render dynamic tab title
@@ -539,14 +545,12 @@ server <- function(input, output) {
 					value = 22)
 	})
 
-
 	# render statistics table
 	output$stats_table <- DT::renderDataTable({
 		lang <- input$select_corpora
 
 		## only one play ##
 		if(!isTRUE(input$checkbox_multiple_plays)) {
-
 			textobj <- get_text(corpusobj = input$select_corpora,
 									url = urlcorpora,
 									play_name = input$select_plays)
@@ -559,7 +563,12 @@ server <- function(input, output) {
 									selected_plays = input$select_multiple_plays)
 		}
 
-		df <- statistics_df(textobj,
+
+		# EXPAND: different approach?
+		# Circumvent following warning:
+		# Warning: Error in textstat_frequency.dfm: dfm must have at least one non-zero value
+		if(isTRUE(nchar(textobj) > 0)) {
+			df <- statistics_df(textobj,
 							lang,
 							multiple_plays = isTRUE(input$checkbox_multiple_plays),
 							remove_punct = input$checkbox_punctation,
@@ -567,12 +576,16 @@ server <- function(input, output) {
 							remove_stopwords = input$checkbox_stopwords,
 							lexical_diversity_measure = input$stats_select_lexical_diversity,
 							readability_measure = input$stats_select_text_readability)
+		} else {
+			df <- data.frame("name" = "...", "result" = "...")
+		}
+
 		
 		withProgress(message = 'Loading plays', value = 0, {
-			DT::datatable(df, 
-							options = list(dom = 't', ordering=FALSE), 
-							escape = FALSE, 
-							selection = "none")
+			DT::datatable(df,
+				options = list(dom = 't', ordering=FALSE), 
+				escape = FALSE, 
+				selection = "none")
 		})
 	})
 
@@ -589,7 +602,7 @@ server <- function(input, output) {
 
 			lang <- input$select_corpora
 
-			textobj <- list()
+			textobj_l <- list()
 
 			withProgress(message = 'Loading plays', value = 0, {
 				i <- 1
@@ -601,13 +614,13 @@ server <- function(input, output) {
 
 					
 					if(isTRUE(input$stats_plot_tokentype_radio == "Tokens")) {
-						textobj[[playname]] <- statistics_df(playtext, lang, 
+						textobj_l[[playname]] <- statistics_df(playtext, lang, 
 															multiple_plays = TRUE,
 															remove_punct = input$checkbox_punctation,
 															tolower = input$checkbox_lowercase, 
 															remove_stopwords = input$checkbox_lowercase)[[1]][1]
 					} else if(isTRUE(input$stats_plot_tokentype_radio == "Types")) {
-						textobj[[playname]] <- statistics_df(playtext, lang, 
+						textobj_l[[playname]] <- statistics_df(playtext, lang, 
 															multiple_plays = TRUE,
 															remove_punct = input$checkbox_punctation,
 															tolower = input$checkbox_lowercase, 
@@ -627,7 +640,7 @@ server <- function(input, output) {
 				text_stat_name <- "Play length (by types)"
 			}
 
-			statistics_distribution(textobj, 
+			statistics_distribution(textobj_l, 
 									input$select_authors, 
 									measure = text_stat_name,
 									text_stat_name = text_stat_name,
@@ -654,7 +667,7 @@ server <- function(input, output) {
 			ld_measure <- get_lexical_diversity_name(input$stats_select_lexical_diversity)
 
 			
-			textobj <- list()
+			textobj_l <- list()
 
 			withProgress(message = 'Loading plays', value = 0, {
 				i <- 1
@@ -667,16 +680,15 @@ server <- function(input, output) {
 											tolower = input$checkbox_lowercase, 
 											remove_stopwords = input$checkbox_stopwords)
 					playname <- names(playnames)[[i]]
-					textobj[[playname]] <- textstat_lexdiv(playtokens, measure = ld_measure)[[2]]
+					textobj_l[[playname]] <- textstat_lexdiv(playtokens, measure = ld_measure)[[2]]
 					
 					# Increment the progress bar, and update the detail text.
-						incProgress(1/n, detail = paste("Play", i, "of", n))
-						i <- i + 1
-
+					incProgress(1/n, detail = paste("Play", i, "of", n))
+					i <- i + 1
 				}
 			})
 
-			statistics_distribution(textobj, 
+			statistics_distribution(textobj_l, 
 									input$select_authors, 
 									ld_measure,
 									text_stat_name = "Lexical diversity",
@@ -700,7 +712,7 @@ server <- function(input, output) {
 			lang <- input$select_corpora
 			tr_measure <- input$stats_select_text_readability
 
-			textobj <- list()
+			textobj_l <- list()
 
 			withProgress(message = 'Loading plays', value = 0, {
 				i <- 1
@@ -709,7 +721,7 @@ server <- function(input, output) {
 											url = urlcorpora,
 											play_name = play)
 					playname <- names(playnames)[[i]]
-					textobj[[playname]] <- textstat_readability(playtext, measure = tr_measure)[[2]]
+					textobj_l[[playname]] <- textstat_readability(playtext, measure = tr_measure)[[2]]
 					
 					# Increment the progress bar, and update the detail text.
 						incProgress(1/n, detail = paste("Play", i, "of", n))
@@ -719,7 +731,7 @@ server <- function(input, output) {
 			})
 
 
-			statistics_distribution(textobj, 
+			statistics_distribution(textobj_l, 
 									input$select_authors, 
 									tr_measure,
 									text_stat_name = "Text readability",
@@ -878,7 +890,8 @@ server <- function(input, output) {
 								lang, 
 								remove_punct = input$checkbox_punctation,
 								tolower = input$checkbox_lowercase, 
-								remove_stopwords = input$checkbox_stopwords)
+								remove_stopwords = input$checkbox_stopwords,
+								frequency_method = input$wordfreq_frequency_radio)
 			})
 
 				
@@ -901,7 +914,8 @@ server <- function(input, output) {
 										lang, 
 										remove_punct = input$checkbox_punctation,
 										tolower = input$checkbox_lowercase, 
-										remove_stopwords = input$checkbox_stopwords)
+										remove_stopwords = input$checkbox_stopwords,
+										frequency_method = input$wordfreq_frequency_radio)
 						
 					})
 
@@ -1192,9 +1206,6 @@ server <- function(input, output) {
 	})
 
 
-	#### todo ####
-	# implement
-
 	# render trends panel title
 	output$trends_panel_title <- renderText({
 		"<h4><u>Trends options</u></h4>"
@@ -1249,7 +1260,7 @@ server <- function(input, output) {
 		}
 
 		selectizeInput("trends_select_token",
-					label = "Select a keyword:",
+					label = "Select the target word:",
 					choices = token_list,
 					# EXPAND: for plays/combined plays with a higher token count
 					options = list(maxOptions = 500000), 
@@ -1267,14 +1278,13 @@ server <- function(input, output) {
 					value = 5)
 	})
 
-
+	# render frequency radio buttons for trend
 	output$trends_frequency_radio <- renderUI({
 		radioButtons("trends_frequency_radio",
 					  label = "Select frequency method:",
 					  choices = c("Relative Frequencies", "Absolute Frequencies"),
 					  selected =  "Relative Frequencies")
 	})
-
 
 	# render checkbox for trends plot title linebreak option
 	output$trends_checkbox_plot_title_linebreak <- renderUI({
@@ -1294,25 +1304,21 @@ server <- function(input, output) {
 	})
 
 
-	###### todo ######
-	
 	# render trends plot
 	output$trends_plotter <- renderPlot({
 
 		lang <- input$select_corpora
 
-
 		## only one play ##
 		if (!isTRUE(input$checkbox_multiple_plays)) {
 			
-			
-
 			textobj <- get_text(corpusobj = input$select_corpora,
 								url = urlcorpora,
 								play_name = input$select_plays)
 
 			withProgress(message = 'Generating trend plot', {
-				trends_segments_plot(textobj,
+				if(isTRUE(nchar(textobj) > 0)) {
+					trends_segments_plot(textobj,
 									lang = lang,
 									url = urlcorpora,
 									remove_punct = input$checkbox_punctation,
@@ -1325,7 +1331,12 @@ server <- function(input, output) {
 									play_name = input$select_plays,
 									frequency_method = input$trends_frequency_radio,
 									plot_title_size = input$trends_plot_title_size_slider,
-									plot_title_linebreak = input$trends_checkbox_plot_title_linebreak)	
+									plot_title_linebreak = input$trends_checkbox_plot_title_linebreak)
+				} else {
+					df <- data.frame()
+					ggplot(df) + geom_point() + xlim(0, 10) + ylim(0, 100)
+				}
+	
 			})
 
 
@@ -1335,40 +1346,26 @@ server <- function(input, output) {
 			playnames <- get_playnames(selectplays(corp(), input$select_authors), 
 										input$select_multiple_plays)
 
-
 			# authors with only one play or only one selected play won't plot anything
 			if(isTRUE(length(selectplays(corp(), input$select_authors)) > 1) &
 				isTRUE(length(playnames) > 1)) {
 				withProgress(message = 'Generating trend plot', {
-					#todo
-					trends_plays_plot(playnames,
-									corpusobj = input$select_corpora,
-									url = urlcorpora,
-									lang = lang,
-									remove_punct = input$checkbox_punctation,
-									tolower = input$checkbox_lowercase, 
-									remove_stopwords = input$checkbox_stopwords,
-									author_name = input$select_authors,
-									frequency_method = input$trends_frequency_radio,
-									target_word = sub(" *\\(.*", "", input$trends_select_token),
-									plot_title_size = input$trends_plot_title_size_slider,
-									plot_title_linebreak = input$trends_checkbox_plot_title_linebreak) 
+					trends_plays_plot(corpusobj = input$select_corpora, 
+						playnames = playnames, 
+						url = urlcorpora, 
+						lang = lang, 
+						remove_punct = input$checkbox_punctation, 
+						tolower = input$checkbox_lowercase, 
+						remove_stopwords = input$checkbox_stopwords,
+						author_name = input$select_authors,
+						frequency_method = input$trends_frequency_radio,
+						target_word = sub(" *\\(.*", "", input$trends_select_token),
+						plot_title_size = input$trends_plot_title_size_slider,
+						plot_title_linebreak = input$trends_checkbox_plot_title_linebreak) 
 				})
 			}
 		} 
-
-
-		
-		
-			
-
-
-		
-		
 	})
-	
-	
-
 
 
 	########################
@@ -1410,12 +1407,13 @@ server <- function(input, output) {
 					value = 5)
 	})
 
-	
 
 	# render token selection
 	output$kwic_select_token <- renderUI({
 
 		lang <- input$select_corpora
+
+
 		if (!isTRUE(input$checkbox_multiple_plays)) {
 			textobj <- get_text(corpusobj = input$select_corpora,
 								url = urlcorpora,
@@ -1457,7 +1455,7 @@ server <- function(input, output) {
 					choices = token_list,
 					# EXPAND: for plays/combined plays with a higher token count
 					options = list(maxOptions = 500000), 
-					selected = "")
+					selected = NULL)
 	})
 
 	
@@ -1514,7 +1512,6 @@ server <- function(input, output) {
 
 # Run the app
 options(shiny.port = 3000)
-#options(shiny.fullstacktrace = TRUE)
 options(shiny.autoreload = TRUE)
 options(shiny.launch.browser = TRUE)
 options(warn=1)
