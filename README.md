@@ -22,18 +22,35 @@ The following table shows the supported corpora. Currently only the **German Dra
 
 ## Requirements
 
-TODO
+The following packages are required. To install the requirements, copy + paste the following lines into an R environment:
+
+```
+
+install.packages(curl)
+install.packages(docstring)
+install.packages(DT)
+install.packages(ggplot2)
+install.packages(jsonlite)
+install.packages(httr)
+install.packages(methods)
+install.packages(plyr)
+install.packages(quanteda)
+install.packages("quanteda.textplots")
+install.packages("quanteda.textstats")
+install.packages(RColorBrewer)
+install.packages(shiny)
+install.packages(shinycssloaders)
+install.packages(shinythemes)
+install.packages(shinyWidgets)
+install.packages(stringr)
+
+```
 
 ## Getting started
 
 ### Online usage
 
-TODO: 
-- App deployen (vorher unnötiges rauslöschen)
-- link überprüfen
-- link testen
-
-You can access XMLvis without installation right from your browser following [this link]( https://realjanpaulus.shinyapps.io/xmlvis/).
+You can access XMLvis without installation right from your browser following [this link]( https://realjanpaulus.shinyapps.io/xmlvis/). The first time you open the page, it may take a few seconds for all the content to load.
 
 ### Offline usage
 
