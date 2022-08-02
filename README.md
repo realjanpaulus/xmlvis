@@ -28,23 +28,23 @@ The following packages are required. To install the requirements, copy + paste t
 
 ```
 
-install.packages(curl)
-install.packages(docstring)
-install.packages(DT)
-install.packages(ggplot2)
-install.packages(jsonlite)
-install.packages(httr)
-install.packages(methods)
-install.packages(plyr)
-install.packages(quanteda)
+install.packages("curl")
+install.packages("docstring")
+install.packages("DT")
+install.packages("ggplot2")
+install.packages("jsonlite")
+install.packages("httr")
+install.packages("methods")
+install.packages("plyr")
+install.packages("quanteda")
 install.packages("quanteda.textplots")
 install.packages("quanteda.textstats")
-install.packages(RColorBrewer)
-install.packages(shiny)
-install.packages(shinycssloaders)
-install.packages(shinythemes)
-install.packages(shinyWidgets)
-install.packages(stringr)
+install.packages("RColorBrewer")
+install.packages("shiny")
+install.packages("shinycssloaders")
+install.packages("shinythemes")
+install.packages("shinyWidgets")
+install.packages("stringr")
 
 ```
 
