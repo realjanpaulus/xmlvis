@@ -1,4 +1,4 @@
-# library("curl")
+library("curl")
 library("docstring", warn.conflicts = FALSE)
 library("DT")
 library("jsonlite", warn.conflicts = FALSE)
