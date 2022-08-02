@@ -6,19 +6,19 @@
 
 The following table shows the supported corpora. Currently only the **German Drama Corpus** is supported.
 
-| DraCor corpora | supported | 
-| -------------- | ----------| 
+| DraCor corpora | supported |
+| -------------- | ----------|
 | Alsatian | :x:  |
-| Caldéron | :x: | 
+| Caldéron | :x: |
 | German | :heavy_check_mark: |
-| Greek | :x: | 
-| Italian | :x: | 
-| Roman | :x: | 
-| Russian | :x: | 
-| Shakespeare | :x: | 
-| Spanish | :x: | 
-| Swedish | :x: | 
-| Tatar | :x: | 
+| Greek | :x: |
+| Italian | :x: |
+| Roman | :x: |
+| Russian | :x: |
+| Shakespeare | :x: |
+| Spanish | :x: |
+| Swedish | :x: |
+| Tatar | :x: |
 
 
 
@@ -51,6 +51,8 @@ install.packages("stringr")
 ## Getting started
 
 ### Online usage
+
+:warning: Online usage isn't possible currently due to a corpus loading error.
 
 You can access XMLvis without installation right from your browser following [this link]( https://realjanpaulus.shinyapps.io/xmlvis/). The first time you open the page, it may take a few seconds for all the content to load.
 
