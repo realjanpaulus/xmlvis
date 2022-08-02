@@ -1,19 +1,17 @@
-library(curl)
-library(docstring, warn.conflicts = FALSE)
-library(DT)
-library(jsonlite, warn.conflicts = FALSE)
-library(methods)
-library(quanteda, warn.conflicts = FALSE)
+library("curl")
+library("docstring", warn.conflicts = FALSE)
+library("DT")
+library("jsonlite", warn.conflicts = FALSE)
+library("methods")
+library("quanteda", warn.conflicts = FALSE)
 library("quanteda.textplots", warn.conflicts = FALSE)
 library("quanteda.textstats", warn.conflicts = FALSE)
-library(shiny, warn.conflicts = FALSE)
-library(shinythemes)
-library(stringr)
+library("shiny", warn.conflicts = FALSE)
+library("shinythemes")
+library("stringr")
 
 
-#################
-# api functions #
-#################
+# api functions
 
 
 extractdramas <- function(urlcorpus) {
@@ -41,7 +39,7 @@ selectauthors <- function(corpus) {
 selectcorpora <- function(urlcorpora) {
 	#' Selects a list of corpora from url.
 	#'
-	#' Takes an url to a json file with corpora infos 
+	#' Takes an url to a json file with corpora infos
 	#' and collects all names in a list.
 	#'
 	#' @param urlcorpora an url to all corpora.
@@ -54,7 +52,7 @@ selectcorpora <- function(urlcorpora) {
 
 selectplays <- function(corpus, input = input) {
 	#' Selects a list of all plays from an author within a corpus.
-	#' 
+	#'
 	#' Takes a corpus and an input (id name, consisting of author + title) and
 	#' returns a list of the authors plays (play name + publication year)
 	#' which is sorted by the publication year in ascending order.
@@ -77,9 +75,7 @@ selectplays <- function(corpus, input = input) {
 }
 
 
-##############################################
-# text processing and other helper functions #
-##############################################
+# text processing and other helper functions
 
 
 combine_dfs <- function(df1, df2) {
@@ -95,16 +91,16 @@ combine_dfs <- function(df1, df2) {
 }
 
 
-documenttermdf <- function(textobj, 
-	lang, 
-	remove_punct = TRUE, 
-	tolower = TRUE, 
+documenttermdf <- function(textobj,
+	lang,
+	remove_punct = TRUE,
+	tolower = TRUE,
 	remove_stopwords = FALSE,
 	use_relative_frequency = FALSE) {
 	#' Creates a document-term matrix from a plain text or a quanteda corpus object.
 	#'
-	#' Takes plain text of a play or a quanteda corpus object 
-	#' and creates a document-term matrix from the text. 
+	#' Takes plain text of a play or a quanteda corpus object
+	#' and creates a document-term matrix from the text.
 	#' The matrix is stored inside a dataframe.
 	#'
 	#' @param textobj text as string.
@@ -115,13 +111,13 @@ documenttermdf <- function(textobj,
 	#' @param use_relative_frequency boolean value if relative frequency should be used.
 
 	if (isTRUE(remove_stopwords)) {
-		df <- dfm(textobj, 
-				  remove_punct = remove_punct, 
+		df <- dfm(textobj,
+				  remove_punct = remove_punct,
 				  tolower = tolower,
 				  remove = get_stopwords(lang))
 	} else {
-		df <- dfm(textobj, 
-				  remove_punct = remove_punct, 
+		df <- dfm(textobj,
+				  remove_punct = remove_punct,
 				  tolower = tolower)
 	}
 
@@ -139,14 +135,14 @@ get_lexical_diversity_name <- function(lexical_diversity_measure) {
 	#'
 	#' Takes a string and checks if it's a valid string for the measure parameter of
 	#' the quanteda lexical diversity function.
-	#'  
+	#'
 	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
-	#'		  All available options can be found here: 
+	#'		  All available options can be found here:
 	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
 	ld_measure_options <- c("TTR", "C", "R", "CTTR", "U", "S", "K", "I", "D", "Vm", "Maas", "MATTR", "MSTTR")
-	names(ld_measure_options) <- c("TTR: Token-Type Ratio", "C: Herdan's C", "R: Root TTR", "CTTR: Corrected TTR", 
-						"U: Uber Index", "S: Summers Index", "K: Yule's K", "I: Yule's I", "D: Simpson's D", 
-						"Vm: Herdan's Vm", "Maas: Maas indices", "MATTR: Moving-Average Type-Token Ratio", 
+	names(ld_measure_options) <- c("TTR: Token-Type Ratio", "C: Herdan's C", "R: Root TTR", "CTTR: Corrected TTR",
+						"U: Uber Index", "S: Summers Index", "K: Yule's K", "I: Yule's I", "D: Simpson's D",
+						"Vm: Herdan's Vm", "Maas: Maas indices", "MATTR: Moving-Average Type-Token Ratio",
 						"MSTTR: Mean Segmental Type-Token Ratio")
 	if (isTRUE(lexical_diversity_measure %in% ld_measure_options)) {
 		return(lexical_diversity_measure)
@@ -160,7 +156,7 @@ get_lexical_diversity_name <- function(lexical_diversity_measure) {
 
 get_playnames <- function(available_plays, selected_plays) {
 	#' Selects plays from a list of plays and returns them in a list with names.
-	#' 
+	#'
 	#' Takes a list of all available plays of an author and a list of plays which
 	#' should be selected and returns a list of the selected plays with names,
 	#' taken from the available plays list.
@@ -202,7 +198,7 @@ get_stopwords <- function(lang) {
 
 get_text <- function(corpusobj, url, play_name) {
 	#' Extracts the play text by an url.
-	#' 
+	#'
 	#' Takes an url to the plain text of an url and extracts the text.
 	#'
 	#' @param corpusobj shiny corpus object.
@@ -215,15 +211,15 @@ get_text <- function(corpusobj, url, play_name) {
 }
 
 
-get_tokens <- function(textobj, 
-	lang, 
-	tolower = TRUE, 
-	remove_punct = TRUE, 
-	remove_stopwords = TRUE, 
+get_tokens <- function(textobj,
+	lang,
+	tolower = TRUE,
+	remove_punct = TRUE,
+	remove_stopwords = TRUE,
 	sort_by = "") {
 	#' Get quanteda token object from a text object.
 	#'
-	#' Takes a text object and creates a (sorted) quanteda tokens object. 
+	#' Takes a text object and creates a (sorted) quanteda tokens object.
 	#'
 	#' @param textobj text as string.
 	#' @param lang language identificator as string.
@@ -231,9 +227,9 @@ get_tokens <- function(textobj,
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_stopwords boolean value if stopwords should be removed.
 	#' @param sort_by string to indicate sorting method. Available options are
-	#'		  'alphabetical', 'mfw' (= most frequent words in descending order), 
-	#'		  'mfw+' (= mfw + frequency in parantheses) or an empty or another string 
-	#'		  which means no sorting will be used. 
+	#'		  'alphabetical', 'mfw' (= most frequent words in descending order),
+	#'		  'mfw+' (= mfw + frequency in parantheses) or an empty or another string
+	#'		  which means no sorting will be used.
 
 	toks <- tokens(textobj, remove_punct = remove_punct)
 
@@ -256,7 +252,7 @@ get_tokens <- function(textobj,
 	# most frequent words + their frequency in parantheses in descending order
 	} else if (isTRUE(sort_by == "mfw+")) {
 		df <- freq_df(textobj, lang, remove_punct = remove_punct, tolower = tolower, remove_stopwords = remove_stopwords)
-		
+
 		toks <- list()
 		toks_mfw <- c(df[["feature"]])
 		toks_freq <- c(df[["frequency"]])
@@ -271,18 +267,18 @@ get_tokens <- function(textobj,
 }
 
 
-parse_texts <- function(corpusobj, 
-	url, 
-	available_plays = list(), 
-	selected_plays = list(), 
-	add_title = FALSE, 
+parse_texts <- function(corpusobj,
+	url,
+	available_plays = list(),
+	selected_plays = list(),
+	add_title = FALSE,
 	skip_union = FALSE) {
 	#' Takes a corpus object and returns a string (or list) with all
 	#' selected plays in it.
 	#'
 	#' Takes a corpus object, a list of all plays of the author and a list
 	#' with plays to be selected. The names for the selected plays will be
-	#' gathered with the help of the list of all plays. The function then 
+	#' gathered with the help of the list of all plays. The function then
 	#' returns a string (or list) of all selected plays, the text is gathered
 	#' by the plays names.
 	#'
@@ -294,8 +290,8 @@ parse_texts <- function(corpusobj,
 	#' @param skip_union boolean if union of selected plays to a string
 	#'		  should be skipped. If TRUE, a list of plays is returned.
 
-	
-	playnames <- get_playnames(available_plays, selected_plays) 
+
+	playnames <- get_playnames(available_plays, selected_plays)
 
 	n <- length(playnames)
 	tmp_textobj <- vector("list", n)
@@ -329,23 +325,21 @@ parse_texts <- function(corpusobj,
 }
 
 
-##################
-# tool functions #
-##################
+# tool functions
 
 
-freq_df <- function(textobj, 
-	lang, 
-	remove_punct = TRUE, 
-	tolower = TRUE, 
-	remove_stopwords = FALSE, 
+freq_df <- function(textobj,
+	lang,
+	remove_punct = TRUE,
+	tolower = TRUE,
+	remove_stopwords = FALSE,
 	frequency_method = "Absolute Frequencies",
 	top_n_features = NULL) {
-	#' Extracts term and document frequencies from a plain text 
+	#' Extracts term and document frequencies from a plain text
 	#' or a quanteda corpus object.
 	#'
-	#' Takes plain text of a play or a quanteda corpus object 
-	#' and creates a dataframe with term and document frequencies of the text. 
+	#' Takes plain text of a play or a quanteda corpus object
+	#' and creates a dataframe with term and document frequencies of the text.
 	#' Columns "rank" and "group" are removed.
 	#'
 	#' @param playtext text of the play as string.
@@ -356,7 +350,7 @@ freq_df <- function(textobj,
 	#' @param frequency_method string name of the frequency method ("Relative Frequencies"
 	#'		  or "Absolute Frequencies").
 	#' @param top_n_features numerical value which indicates the top n features.
-	
+
 
 	if(frequency_method == "Relative Frequencies") {
 		use_relative_frequency <- TRUE
@@ -365,29 +359,29 @@ freq_df <- function(textobj,
 		use_relative_frequency <- FALSE
 	}
 
-	df <- documenttermdf(textobj, lang, 
+	df <- documenttermdf(textobj, lang,
 						 remove_punct = remove_punct,
-					   	 tolower = tolower, 
+					   	 tolower = tolower,
 					   	 remove_stopwords = remove_stopwords,
 					   	 use_relative_frequency = use_relative_frequency)
-	return(subset(textstat_frequency(df, n=top_n_features), select=-c(rank, group)))	
+	return(subset(textstat_frequency(df, n=top_n_features), select=-c(rank, group)))
 }
 
 
-frequency_distribution <- function(textobj, 
-	lang, 
-	remove_punct = TRUE, 
-	tolower = TRUE, 
-	remove_stopwords = FALSE, 
-	all_playnames = list(), 
-	author_name = "", 
-	color_point = "#8DA0CB", 
+frequency_distribution <- function(textobj,
+	lang,
+	remove_punct = TRUE,
+	tolower = TRUE,
+	remove_stopwords = FALSE,
+	all_playnames = list(),
+	author_name = "",
+	color_point = "#8DA0CB",
 	frequency_method = "Relative Frequencies",
-	multiple_plays = FALSE, 
-	play_name = "", 
-	plot_title_linebreak = FALSE, 
-	plot_title_size = 22, 
-	revert_order = FALSE, 
+	multiple_plays = FALSE,
+	play_name = "",
+	plot_title_linebreak = FALSE,
+	plot_title_size = 22,
+	revert_order = FALSE,
 	top_n_features = 100) {
 	#' Creates a frequency distribution from a text.
 	#'
@@ -420,13 +414,13 @@ frequency_distribution <- function(textobj,
 	}
 
 	if(isTRUE(multiple_plays)) {
-		plot_title <- paste0("Word frequency distribution ", lb, 
+		plot_title <- paste0("Word frequency distribution ", lb,
 						"of the selected plays by '", author_name, "'")
 	} else {
-		playnames <- get_playnames(all_playnames, play_name) 
+		playnames <- get_playnames(all_playnames, play_name)
 		playname <- names(unlist(playnames))[1]
 
-		plot_title <- paste0("Word frequency distribution ", lb, 
+		plot_title <- paste0("Word frequency distribution ", lb,
 						"of the play '", playname, "' by '", author_name, "'")
 	}
 
@@ -439,9 +433,9 @@ frequency_distribution <- function(textobj,
 		y_col_name <- "Absolute frequency"
 	}
 
-	df <- freq_df(textobj, lang, 
+	df <- freq_df(textobj, lang,
 					 remove_punct = remove_punct,
-					 tolower = tolower, 
+					 tolower = tolower,
 					 remove_stopwords = remove_stopwords,
 					 frequency_method = frequency_method,
 					 top_n_features = top_n_features)
@@ -469,11 +463,11 @@ frequency_distribution <- function(textobj,
 	}
 
 
-	g <- ggplot(data = df, aes(x = feature, y = frequency)) + 
-				geom_point(colour=color_point, size=size) + 
+	g <- ggplot(data = df, aes(x = feature, y = frequency)) +
+				geom_point(colour=color_point, size=size) +
 				labs(title = plot_title, y = y_col_name, x = "Features") +
-				scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) + 
-				theme_bw(base_size=base_size) + 
+				scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+				theme_bw(base_size=base_size) +
 				theme(axis.text.x = element_text(angle = 90, hjust = 1),
 						plot.title = element_text(size=plot_title_size,
 													margin=margin(0,0,10,0)))
@@ -483,15 +477,15 @@ frequency_distribution <- function(textobj,
 
 
 # EXPAND: allow phrases
-kwic_df <- function(textobj, 
-	lang, 
-	pattern, 
-	window = 5, 
-	docname = "", 
-	tolower = TRUE, 
+kwic_df <- function(textobj,
+	lang,
+	pattern,
+	window = 5,
+	docname = "",
+	tolower = TRUE,
 	remove_punct = TRUE) {
 	#' Creates a quanteda KWIC dataframe.
-	#' 
+	#'
 	#' Takes a text object and a pattern/keyword to create a KWIC DataFrame from them.
 	#'
 	#' @param textobj text as string.
@@ -501,16 +495,16 @@ kwic_df <- function(textobj,
 	#' @param docname string which, if not empty, sets the name of the document.
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_punct boolean value if punctation should be removed.
-	toks <- get_tokens(textobj, lang, 
+	toks <- get_tokens(textobj, lang,
 						tolower = tolower,
-						remove_punct = remove_punct, 
-						remove_stopwords = FALSE) 
+						remove_punct = remove_punct,
+						remove_stopwords = FALSE)
 
 
 	if(isTRUE(docname != "")) {
 		docnames(toks) <- docname
 	}
-	
+
 	df <- kwic(toks, pattern = pattern, window = window)
 	df <- subset(df, select = -c(pattern, to))
 	names(df)[names(df) == 'from'] <- 'from/to'
@@ -518,13 +512,13 @@ kwic_df <- function(textobj,
 }
 
 
-statistics_df <- function(textobj, 
-	lang, 
-	multiple_plays = FALSE, 
-	remove_punct = TRUE, 
-	tolower = TRUE, 
-	remove_stopwords = FALSE, 
-	lexical_diversity_measure = "TTR", 
+statistics_df <- function(textobj,
+	lang,
+	multiple_plays = FALSE,
+	remove_punct = TRUE,
+	tolower = TRUE,
+	remove_stopwords = FALSE,
+	lexical_diversity_measure = "TTR",
 	readability_measure = "Flesch") {
 	#' Creates a dataframe with several statistics from a text object.
 	#'
@@ -539,13 +533,13 @@ statistics_df <- function(textobj,
 	#' @param tolower boolean value if words should be converted to lowercase.
 	#' @param remove_stopwords boolean value if stopwords should be removed.
 	#' @param lexical_diversity_measure string which indicates a lexical diversity measure.
-	#'		  All available options can be found here: 
+	#'		  All available options can be found here:
 	#'		  https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
 	#' @param readability_measure string which indicates the text readability measure.
-	#'		  All available options can be found here: 
+	#'		  All available options can be found here:
 	#'		  https://www.rdocumentation.org/packages/quanteda/versions/2.1.2/topics/textstat_readability
 
-	
+
 	if (isTRUE(multiple_plays)) {
 		string_play_name <- "selected plays"
 	} else {
@@ -558,16 +552,16 @@ statistics_df <- function(textobj,
 	toks_sw <- get_tokens(textobj, lang, tolower = tolower, remove_punct = remove_punct, remove_stopwords = FALSE)
 
 
-	## word counts ##
+	# word counts
 	tokens_count <- ntoken(toks)
 	types_count <- ntype(toks)
 
-	## hapax legomenon ##
+	# hapax legomenon
 	df <- freq_df(textobj, lang, remove_punct = remove_punct, tolower = tolower, remove_stopwords = remove_stopwords)
 	hapax_legomenon <- nrow(subset(df, frequency==1))
 
 
-	## proportion stop words ##
+	# proportion stop words
 	toks_no_sw_count <- ntype(toks_no_sw)
 	toks_sw_count <- ntype(toks_sw)
 
@@ -575,19 +569,19 @@ statistics_df <- function(textobj,
 	proportion_stopwords <- paste0("~",(round(count_stopwords / toks_sw_count, digits=3)*100),"%")
 
 
-	## count sentences ##
+	# count sentences
 	count_sentences <- nsentence(textobj)
 
 
-	## count numbers ##
+	# count numbers
 	count_numbers <- str_count(textobj, '\\d+')
 
-	## lexical diversity ##
-	lexical_diversity <- round(textstat_lexdiv(toks, 
-								measure = get_lexical_diversity_name(lexical_diversity_measure))[[2]], 
+	# lexical diversity
+	lexical_diversity <- round(textstat_lexdiv(toks,
+								measure = get_lexical_diversity_name(lexical_diversity_measure))[[2]],
 								digits=3)
 
-	## readability ##
+	# readability
 	readability <- round(textstat_readability(textobj, measure = readability_measure)[[2]], digits=3)
 
 
@@ -602,11 +596,11 @@ statistics_df <- function(textobj,
 	}
 
 
-	tokens_count_name <- paste0("<b>", "Overall word count of ", string_play_name, " (= <u>token</u> count)", 
+	tokens_count_name <- paste0("<b>", "Overall word count of ", string_play_name, " (= <u>token</u> count)",
 								"</b>", string_length_play)
-	types_count_name <- paste0("<b>", "Unique word count of ", string_play_name, " (= <u>type</u> count)", 
+	types_count_name <- paste0("<b>", "Unique word count of ", string_play_name, " (= <u>type</u> count)",
 										"</b>", string_length_play)
-	hapax_legomenon_name <- paste0("<b>", "Count of Hapax legomenon in ", string_play_name, 
+	hapax_legomenon_name <- paste0("<b>", "Count of Hapax legomenon in ", string_play_name,
 										"</b>", string_length_play)
 	proportion_stopwords_name <- paste0("<b>", "Proportion of stop words in ", string_play_name, "</b>")
 	count_sentences_name <- paste0("<b>", "Count of sentences in ", string_play_name, "</b>")
@@ -615,7 +609,7 @@ statistics_df <- function(textobj,
 	readability_name <- paste0("<b>", "Text readability of ", string_play_name, "</b>")
 
 	index_col <- list(tokens_count_name, types_count_name, hapax_legomenon_name, proportion_stopwords_name, count_sentences_name, count_numbers_name, lexical_diversity_name, readability_name)
-	result_col <- list(tokens_count, types_count, hapax_legomenon, proportion_stopwords, count_sentences, 
+	result_col <- list(tokens_count, types_count, hapax_legomenon, proportion_stopwords, count_sentences,
 					 count_numbers, lexical_diversity, readability)
 
 	df <- data.frame("name" = unlist(index_col), "result" = unlist(result_col))
@@ -626,26 +620,26 @@ statistics_df <- function(textobj,
 }
 
 
-statistics_distribution <- function(l, 
-	author_name, 
-	measure, 
-	text_stat_name = "Lexical diversity", 
-	plot_method = "Line Plot", 
-	plot_title_linebreak = FALSE, 
+statistics_distribution <- function(l,
+	author_name,
+	measure,
+	text_stat_name = "Lexical diversity",
+	plot_method = "Line Plot",
+	plot_title_linebreak = FALSE,
 	plot_title_size = 22) {
-	#' Creates a line plot with a specified measure (lexical diversity, text readability) 
+	#' Creates a line plot with a specified measure (lexical diversity, text readability)
 	#' from a list of playnames.
 	#'
 	#' Takes a list of playnames and a specified measure (lexical diversity, text readability)
-	#' and returns a line plot with the play names on the x-axis and the measures on the y-axis. 
-	#' 
+	#' and returns a line plot with the play names on the x-axis and the measures on the y-axis.
+	#'
 	#' @param l list with names of all plays of an author.
 	#' @param author_name string with the name of the author.
 	#' @param measure string which indicates a the measures name.
-	#'		  All available options can be found here: 
+	#'		  All available options can be found here:
 	#'		  - https://www.rdocumentation.org/packages/quanteda.textstats/versions/0.91/topics/textstat_lexdiv
 	#'		  - https://www.rdocumentation.org/packages/quanteda/versions/2.1.2/topics/textstat_readability
-	#' @param text_stat_name string which indicates the text statistics name which should be plotted. 
+	#' @param text_stat_name string which indicates the text statistics name which should be plotted.
 	#' @param plot_method string which indicates plot method ("Line Plot" or "Bar chart").
 	#' @param plot_title_linebreak boolean if plot title should contain linebreak.
 	#' @param plot_title_size numeric which indicates size of plot title.
@@ -669,7 +663,7 @@ statistics_distribution <- function(l,
 		base_size <- 16
 		point_size <- 2
 		line_size <- 0.4
-	} 
+	}
 	if (isTRUE(plot_title_linebreak)) {
 		lb <- "\n"
 	} else {
@@ -677,45 +671,45 @@ statistics_distribution <- function(l,
 	}
 
 	# EXPAND: include option (e.g. checkbox) by which a fixed coordinate system can be selected
-	
-		
+
+
 	if (isTRUE(plot_method == "Bar chart")) {
-		g <- ggplot(data = df, 
-				aes(x = name, y = value, group = 1)) + 
-				geom_bar(stat='identity', color="#8DA0CB", fill="#8DA0CB") + 
+		g <- ggplot(data = df,
+				aes(x = name, y = value, group = 1)) +
+				geom_bar(stat='identity', color="#8DA0CB", fill="#8DA0CB") +
 				# EXPAND: reduce/expand spacing bewtween x-axis and line plot/bar chart?
-				scale_y_continuous(expand = expansion(mult = c(0.01, .1))) + 
-				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"), 
-						y = measure, x = "Play names") + 
-				theme_bw(base_size=base_size) + 
+				scale_y_continuous(expand = expansion(mult = c(0.01, .1))) +
+				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"),
+						y = measure, x = "Play names") +
+				theme_bw(base_size=base_size) +
 				theme(axis.text.x = element_text(angle = 90, hjust = 1),
 						plot.title = element_text(size=plot_title_size,
 													margin=margin(0,0,10,0)))
 	} else {
-		g <- ggplot(data = df, 
-				aes(x = name, y = value, group = 1)) + 
-				geom_line(aes(group=1), size = line_size) + 
+		g <- ggplot(data = df,
+				aes(x = name, y = value, group = 1)) +
+				geom_line(aes(group=1), size = line_size) +
 				geom_point(colour="#8DA0CB", size = point_size) +
 				scale_y_continuous(limits = c(0, max(df$value) * 1.1)) +
-				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"), 
-						y = measure, x = "Play names") + 
-				theme_bw(base_size=base_size) + 
+				labs(title = paste0(text_stat_name, " of the plays by ", lb, "'", author_name, "'"),
+						y = measure, x = "Play names") +
+				theme_bw(base_size=base_size) +
 				theme(axis.text.x = element_text(angle = 90, hjust = 1),
 						plot.title = element_text(size=plot_title_size,
 													margin=margin(0,0,10,0)))
 	}
-	
-	
+
+
 	return(g)
 }
 
 
-trends_plays_plot <- function(corpusobj, 
+trends_plays_plot <- function(corpusobj,
 	playnames,
-	lang, 
-	url, 
+	lang,
+	url,
 	remove_punct = TRUE,
-	tolower = TRUE, 
+	tolower = TRUE,
 	remove_stopwords = FALSE,
 	author_name = "",
 	frequency_method = "Relative Frequencies",
@@ -740,7 +734,7 @@ trends_plays_plot <- function(corpusobj,
 	#' @param target_word string which indicates the target word.
 	#' @param plot_title_linebreak boolean if plot title should contain linebreak.
 	#' @param plot_title_size numeric which indicates size of plot title.
-	
+
 
 	freq_list <- list()
 
@@ -749,17 +743,17 @@ trends_plays_plot <- function(corpusobj,
 		playtext <- get_text(corpusobj = corpusobj,
 							url = url,
 							play_name = play)
-	
-		frequency_df <- freq_df(playtext, lang, 
+
+		frequency_df <- freq_df(playtext, lang,
 								tolower = tolower,
 								remove_punct = remove_punct,
-								remove_stopwords = remove_stopwords) 
+								remove_stopwords = remove_stopwords)
 
 		if(isTRUE(target_word %in% frequency_df$feature)) {
 			target_freq <- frequency_df$frequency[frequency_df$feature == target_word]
 
 			if(frequency_method == "Relative Frequencies") {
-				toks <- get_tokens(playtext, 
+				toks <- get_tokens(playtext,
 									lang = lang,
 									tolower = tolower,
 									remove_punct = remove_punct,
@@ -768,14 +762,14 @@ trends_plays_plot <- function(corpusobj,
 				target_freq <- target_freq / token_count
 			}
 
-			
+
 		} else {
 			target_freq <- 0
 		}
 
-		#to avoid errors with ".text" after playname 
+		#to avoid errors with ".text" after playname
 		target_freq <- as.numeric(target_freq)
-		
+
 		playname <- names(playnames)[[i]]
 		freq_list[[playname]] <- target_freq
 
@@ -811,7 +805,7 @@ trends_plays_plot <- function(corpusobj,
 		base_size <- 14
 		point_size <- 1
 		line_size <- 0.3
-	} 
+	}
 
 	if (isTRUE(plot_title_linebreak)) {
 		lb <- "\n"
@@ -819,15 +813,15 @@ trends_plays_plot <- function(corpusobj,
 		lb <- ""
 	}
 
-	plot_title <- paste0("The word '", target_word, "' in the selected plays ", lb, 
+	plot_title <- paste0("The word '", target_word, "' in the selected plays ", lb,
 						"by '", author_name, "'")
 
-	g <- ggplot(data = df, aes(x = name, y = frequency)) + 
-			geom_line(aes(group=1), size = line_size) + 
+	g <- ggplot(data = df, aes(x = name, y = frequency)) +
+			geom_line(aes(group=1), size = line_size) +
 			geom_point(colour="#8DA0CB", size = point_size) +
-			labs(title = plot_title, y = y_col_name, x = "Selected plays") + 
-			scale_y_continuous(limits = c(0, max(df$frequency) * 1.5)) + 
-			theme_bw(base_size=base_size) + 
+			labs(title = plot_title, y = y_col_name, x = "Selected plays") +
+			scale_y_continuous(limits = c(0, max(df$frequency) * 1.5)) +
+			theme_bw(base_size=base_size) +
 			theme(axis.text.x = element_text(angle = 90, hjust = 1),
 					plot.title = element_text(size=plot_title_size,
 												margin=margin(0,0,10,0)))
@@ -836,11 +830,11 @@ trends_plays_plot <- function(corpusobj,
 }
 
 
-trends_segments_plot <- function(textobj, 
-	lang, 
-	url, 
+trends_segments_plot <- function(textobj,
+	lang,
+	url,
 	remove_punct = TRUE,
-	tolower = TRUE, 
+	tolower = TRUE,
 	remove_stopwords = FALSE,
 	n_segments = 10,
 	author_name = "",
@@ -850,7 +844,7 @@ trends_segments_plot <- function(textobj,
 	frequency_method = "Absolute Frequencies",
 	plot_title_linebreak = FALSE,
 	plot_title_size = 22) {
-	
+
 	#' Plots a trend plot of a target word in segments of a given play.
 	#'
 	#' Takes a text object, a number of segments, a target word and a frequency method
@@ -872,10 +866,10 @@ trends_segments_plot <- function(textobj,
 	#' @param plot_title_linebreak boolean if plot title should contain linebreak.
 	#' @param plot_title_size numeric which indicates size of plot title.
 
-	playnames <- get_playnames(all_playnames, play_name) 
+	playnames <- get_playnames(all_playnames, play_name)
 	playname <- names(unlist(playnames))[1]
 
-	toks <- get_tokens(textobj, 
+	toks <- get_tokens(textobj,
 						lang = lang,
 						tolower = tolower,
 						remove_punct = remove_punct,
@@ -892,11 +886,11 @@ trends_segments_plot <- function(textobj,
 	i <- 1
 	for(element in segments_list) {
 
-		frequency_df <- freq_df(tok_segments[paste0("text1.", i)], 
-							lang, 
+		frequency_df <- freq_df(tok_segments[paste0("text1.", i)],
+							lang,
 							tolower = tolower,
 							remove_punct = remove_punct,
-							remove_stopwords = remove_stopwords) 
+							remove_stopwords = remove_stopwords)
 
 		target_freq <- frequency_df$frequency[frequency_df$feature == target_word]
 
@@ -920,8 +914,8 @@ trends_segments_plot <- function(textobj,
 		y_col_name <- "Absolute Frequencies"
 	}
 
-	
-	### plotting ###
+
+	# plotting
 
 	if(n_segments <= 5) {
 		base_size <- 20
@@ -949,28 +943,28 @@ trends_segments_plot <- function(textobj,
 	}
 
 
-	plot_title <- paste0("The word '", target_word, "' in the segments ", lb, 
+	plot_title <- paste0("The word '", target_word, "' in the segments ", lb,
 					"of the play '", playname, "' by '", author_name, "'")
-	
-	
-	g <- ggplot(data = df, aes(x = segment, y = frequency)) + 
+
+
+	g <- ggplot(data = df, aes(x = segment, y = frequency)) +
 			geom_line(aes(group = 1), size = line_size) +
 			geom_point(colour = "#8DA0CB", size = point_size) +
-			labs(title = plot_title, y = y_col_name, x = "Segments") + 
-			scale_x_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) + 
+			labs(title = plot_title, y = y_col_name, x = "Segments") +
+			scale_x_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) +
 			scale_y_continuous(limits = c(0, max(df$frequency) * 1.5)) +
-			theme_bw(base_size = base_size) + 
+			theme_bw(base_size = base_size) +
 			theme(plot.title = element_text(size=plot_title_size,
 											margin=margin(0,0,10,0)))
-	
+
 
 	return(g)
 }
 
 
-wordcloudplot <- function(textobj, lang, 
+wordcloudplot <- function(textobj, lang,
 	remove_punct = TRUE,
-	tolower = TRUE, 
+	tolower = TRUE,
 	remove_stopwords = FALSE,
 	colors = c('red', 'pink', 'green', 'purple', 'orange', 'blue'),
 	comparison = FALSE,
@@ -1000,12 +994,12 @@ wordcloudplot <- function(textobj, lang,
 	#'					which will be plotted.
 	#' @param min_freq numeric value which indicates how high the frequency of a word
 	#' 				   must be in order to be plotted
-	#' @param word_padding numeric value which indicates the padding space 
-	#'					   between the words. Is multiplied by -1 so that a 
+	#' @param word_padding numeric value which indicates the padding space
+	#'					   between the words. Is multiplied by -1 so that a
 	#'					   bigger value indicates a higher padding space.
-	df <- documenttermdf(textobj, lang, 
+	df <- documenttermdf(textobj, lang,
 						 remove_punct = remove_punct,
-					   	 tolower = tolower, 
+					   	 tolower = tolower,
 					   	 remove_stopwords = remove_stopwords)
 
 	return(textplot_wordcloud(df,
@@ -1017,5 +1011,3 @@ wordcloudplot <- function(textobj, lang,
 							  max_words = max_words,
 							  min_count = min_freq))
 }
-
-
